@@ -362,11 +362,17 @@ ${COMPOSE_CMD} down 2>/dev/null || true
 # User-Template Image bauen (fuer User-Container)
 if [ -d "${INSTALL_DIR}/user-template" ]; then
     echo "  [1/4] Baue user-service-template (User-Container)..."
-    if docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/" > /dev/null 2>&1; then
+    echo ""
+
+    if docker build --no-cache --progress=plain -t user-service-template:latest "${INSTALL_DIR}/user-template/" 2>&1 | \
+       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
+       sed 's/^/        /'; then
+        echo ""
         echo -e "  user-service-template: ${GREEN}OK${NC}"
     else
+        echo ""
         echo -e "  user-service-template: ${RED}FEHLER${NC}"
-        echo "  Versuche mit detaillierter Ausgabe..."
+        echo "  Versuche erneut mit voller Ausgabe..."
         docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/"
         exit 1
     fi
