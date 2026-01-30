@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # Flask API Backend
+  spawner:
+    build: .
+    container_name: spawner
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    ports:
+      - "5000:5000"  # Optional: Direktzugriff für Debugging
+
+    volumes:
+      # Docker-Socket für Container-Management
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # Persistente Daten
+      - ./data:/app/data
+      # Logs
+      - ./logs:/app/logs
+
+    environment:
+      # Aus .env-Datei
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-${SECRET_KEY}}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - TRAEFIK_NETWORK=${TRAEFIK_NETWORK}
+      - USER_TEMPLATE_IMAGE=${USER_TEMPLATE_IMAGE:-user-service-template:latest}
+      - SPAWNER_SUBDOMAIN=${SPAWNER_SUBDOMAIN:-coder}
+      - CORS_ORIGINS=https://${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN},http://localhost:3000
+      # Traefik-Konfiguration
+      - TRAEFIK_CERTRESOLVER=${TRAEFIK_CERTRESOLVER:-lets-encrypt}
+      - TRAEFIK_ENTRYPOINT=${TRAEFIK_ENTRYPOINT:-websecure}
+      # Docker-Verbindung
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+
+    networks:
+      - web
+
+    labels:
+      # Traefik aktivieren
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+
+      # API-Router (hoehere Prioritaet fuer /api/*)
+      - "traefik.http.routers.spawner-api.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.spawner-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-api.priority=200"
+      - "traefik.http.routers.spawner-api.service=spawner-api-service"
+      - "traefik.http.services.spawner-api-service.loadbalancer.server.port=5000"
+
+      # Legacy-Router fuer alte Flask-Templates (niedrige Prioritaet)
+      - "traefik.http.routers.spawner-legacy.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && (PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/logout`) || PathPrefix(`/dashboard`) || PathPrefix(`/container`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.spawner-legacy.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-legacy.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-legacy.priority=100"
+      - "traefik.http.routers.spawner-legacy.service=spawner-api-service"
+
+      # Metadata
+      - "spawner.managed=true"
+      - "spawner.version=2.0.0"
+      - "spawner.type=api-service"
+
+    # Health-Check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Next.js Frontend
+  frontend:
+    build: ./frontend
+    container_name: spawner-frontend
+    restart: unless-stopped
+
+    environment:
+      - NEXT_PUBLIC_API_URL=
+
+    networks:
+      - web
+
+    labels:
+      # Traefik aktivieren
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+
+      # Frontend-Router (niedrigere Prioritaet - Catch-All)
+      - "traefik.http.routers.spawner-frontend.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.spawner-frontend.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-frontend.priority=50"
+      - "traefik.http.routers.spawner-frontend.service=spawner-frontend-service"
+      - "traefik.http.services.spawner-frontend-service.loadbalancer.server.port=3000"
+
+      # Metadata
+      - "spawner.managed=true"
+      - "spawner.version=2.0.0"
+      - "spawner.type=frontend-service"
+
+    # Health-Check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    depends_on:
+      - spawner
+
+# Externes Netzwerk (von deinem Traefik bereits vorhanden)
+networks:
+  web:
+    external: true
