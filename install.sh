@@ -23,19 +23,50 @@ MIN_DOCKER_VERSION="20.10"
 MIN_COMPOSE_VERSION="2.0"
 
 # ============================================================
-# Hilfsfunktion: Versionen vergleichen
+# Hilfsfunktion: Versionen vergleichen (BusyBox/Synology kompatibel)
 # Gibt 0 zurueck wenn $1 >= $2, sonst 1
 # ============================================================
 version_gte() {
     # Vergleiche zwei Versionen (z.B. "20.10.21" >= "20.10")
+    # Kompatibel mit BusyBox (kein sort -V)
     local ver1="$1"
     local ver2="$2"
 
-    # Sortiere Versionen und pruefe ob ver1 >= ver2
-    if [ "$(printf '%s\n' "$ver2" "$ver1" | sort -V | head -n1)" = "$ver2" ]; then
-        return 0  # ver1 >= ver2
+    # Extrahiere Major.Minor.Patch (fuege .0 hinzu falls noetig)
+    local v1_major v1_minor v1_patch
+    local v2_major v2_minor v2_patch
+
+    v1_major=$(echo "$ver1" | cut -d. -f1)
+    v1_minor=$(echo "$ver1" | cut -d. -f2)
+    v1_patch=$(echo "$ver1" | cut -d. -f3)
+    v1_minor=${v1_minor:-0}
+    v1_patch=${v1_patch:-0}
+
+    v2_major=$(echo "$ver2" | cut -d. -f1)
+    v2_minor=$(echo "$ver2" | cut -d. -f2)
+    v2_patch=$(echo "$ver2" | cut -d. -f3)
+    v2_minor=${v2_minor:-0}
+    v2_patch=${v2_patch:-0}
+
+    # Vergleiche Major
+    if [ "$v1_major" -gt "$v2_major" ] 2>/dev/null; then
+        return 0
+    elif [ "$v1_major" -lt "$v2_major" ] 2>/dev/null; then
+        return 1
+    fi
+
+    # Major gleich, vergleiche Minor
+    if [ "$v1_minor" -gt "$v2_minor" ] 2>/dev/null; then
+        return 0
+    elif [ "$v1_minor" -lt "$v2_minor" ] 2>/dev/null; then
+        return 1
+    fi
+
+    # Minor gleich, vergleiche Patch
+    if [ "$v1_patch" -ge "$v2_patch" ] 2>/dev/null; then
+        return 0
     else
-        return 1  # ver1 < ver2
+        return 1
     fi
 }
 
@@ -97,7 +128,9 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 # Docker Version extrahieren (z.B. "20.10.21" aus "Docker version 20.10.21, build baeda1f")
-DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker version | grep -oP 'version \K[0-9.]+' | head -1)
+# BusyBox-kompatibel (kein grep -P)
+DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || \
+    docker version 2>/dev/null | grep -i "version" | head -1 | sed 's/.*version[: ]*\([0-9.]*\).*/\1/')
 if [ -z "$DOCKER_VERSION" ]; then
     echo -e "${YELLOW}Warnung: Docker-Version konnte nicht ermittelt werden${NC}"
     echo -e "  Docker:         ${YELLOW}OK${NC} (Version unbekannt, min. ${MIN_DOCKER_VERSION} empfohlen)"
@@ -111,14 +144,17 @@ else
 fi
 
 # Docker Compose - Existenz und Version pruefen
+# BusyBox-kompatibel (kein grep -P)
 COMPOSE_VERSION=""
 if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD="docker compose"
     # Version extrahieren (z.B. "2.21.0" aus "Docker Compose version v2.21.0")
-    COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || docker compose version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || \
+        docker compose version 2>/dev/null | sed 's/[^0-9.]*\([0-9][0-9.]*\).*/\1/' | head -1)
 elif command -v docker-compose >/dev/null 2>&1; then
     COMPOSE_CMD="docker-compose"
-    COMPOSE_VERSION=$(docker-compose version --short 2>/dev/null || docker-compose version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    COMPOSE_VERSION=$(docker-compose version --short 2>/dev/null || \
+        docker-compose version 2>/dev/null | sed 's/[^0-9.]*\([0-9][0-9.]*\).*/\1/' | head -1)
 else
     echo -e "${RED}Fehler: Docker Compose nicht gefunden!${NC}"
     echo "Docker Compose ist Teil von Docker Desktop oder kann separat installiert werden."
@@ -280,8 +316,10 @@ if [ -z "$TRAEFIK_CONTAINER" ]; then
 fi
 
 if [ -n "$TRAEFIK_CONTAINER" ]; then
-    # Pruefe Traefik-Version
-    TRAEFIK_VERSION=$(docker exec "$TRAEFIK_CONTAINER" traefik version 2>/dev/null | grep -oP 'Version:\s*\K[0-9.]+' || echo "unbekannt")
+    # Pruefe Traefik-Version (BusyBox-kompatibel)
+    TRAEFIK_VERSION=$(docker exec "$TRAEFIK_CONTAINER" traefik version 2>/dev/null | \
+        grep -i "version" | head -1 | sed 's/.*Version[: ]*\([0-9.]*\).*/\1/' || echo "unbekannt")
+    [ -z "$TRAEFIK_VERSION" ] && TRAEFIK_VERSION="unbekannt"
     echo -e "  Traefik:        ${GREEN}laeuft${NC} (Container: ${TRAEFIK_CONTAINER}, v${TRAEFIK_VERSION})"
 
     # Pruefe ob Traefik am gleichen Netzwerk haengt
@@ -337,80 +375,50 @@ fi
 # User-Template-Next Image bauen (alternatives Template, optional)
 if [ -d "${INSTALL_DIR}/user-template-next" ]; then
     echo "  [2/4] Baue user-template-next (Next.js Template)..."
-    echo -e "        ${BLUE}Dies kann einige Minuten dauern (npm install + build)...${NC}"
+    echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
+    echo ""
 
-    # Build mit Fortschrittsanzeige
-    docker build -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > /tmp/build-user-template-next.log 2>&1 &
-    BUILD_PID=$!
-
-    # Fortschrittsanzeige waehrend Build laeuft
-    printf "        "
-    while kill -0 $BUILD_PID 2>/dev/null; do
-        printf "."
-        sleep 2
-    done
-    printf "\n"
-
-    # Pruefe Build-Ergebnis
-    wait $BUILD_PID
-    BUILD_EXIT=$?
-
-    if [ $BUILD_EXIT -eq 0 ]; then
+    if docker build --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" 2>&1 | \
+       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
+       sed 's/^/        /'; then
+        echo ""
         echo -e "  user-template-next: ${GREEN}OK${NC}"
     else
+        echo ""
         echo -e "  user-template-next: ${YELLOW}WARNUNG - Build fehlgeschlagen (optional)${NC}"
-        echo "        Details: /tmp/build-user-template-next.log"
     fi
 fi
 
 # Spawner Backend Image bauen
 echo "  [3/4] Baue Spawner API (Flask Backend)..."
-docker build -t spawner:latest "${INSTALL_DIR}/" > /tmp/build-spawner.log 2>&1 &
-BUILD_PID=$!
 
-printf "        "
-while kill -0 $BUILD_PID 2>/dev/null; do
-    printf "."
-    sleep 1
-done
-printf "\n"
-
-wait $BUILD_PID
-BUILD_EXIT=$?
-
-if [ $BUILD_EXIT -eq 0 ]; then
+if docker build --progress=plain -t spawner:latest "${INSTALL_DIR}/" 2>&1 | \
+   grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
+   sed 's/^/        /'; then
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
     echo -e "  spawner-api: ${RED}FEHLER${NC}"
-    echo "  Build-Log:"
-    cat /tmp/build-spawner.log
+    echo "  Versuche erneut mit voller Ausgabe..."
+    docker build -t spawner:latest "${INSTALL_DIR}/"
     exit 1
 fi
 
 # Frontend Image bauen
 if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo "  [4/4] Baue Frontend (Next.js)..."
-    echo -e "        ${BLUE}Dies kann einige Minuten dauern (npm install + build)...${NC}"
+    echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
+    echo ""
 
-    docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > /tmp/build-frontend.log 2>&1 &
-    BUILD_PID=$!
-
-    printf "        "
-    while kill -0 $BUILD_PID 2>/dev/null; do
-        printf "."
-        sleep 2
-    done
-    printf "\n"
-
-    wait $BUILD_PID
-    BUILD_EXIT=$?
-
-    if [ $BUILD_EXIT -eq 0 ]; then
+    if docker build --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" 2>&1 | \
+       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
+       sed 's/^/        /'; then
+        echo ""
         echo -e "  spawner-frontend: ${GREEN}OK${NC}"
     else
+        echo ""
         echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
-        echo "  Build-Log:"
-        tail -50 /tmp/build-frontend.log
+        echo "  Versuche erneut mit voller Ausgabe..."
+        docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/"
         exit 1
     fi
 fi
