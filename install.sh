@@ -380,16 +380,23 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
     echo "  [1/4] Baue user-service-template (User-Container)..."
     echo ""
 
-    if docker build --no-cache --progress=plain -t user-service-template:latest "${INSTALL_DIR}/user-template/" 2>&1 | \
-       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
-       sed 's/^/        /'; then
+    # Build ausfuehren und Output in Datei speichern
+    BUILD_LOG="/tmp/build-user-template.log"
+    docker build --no-cache --progress=plain -t user-service-template:latest "${INSTALL_DIR}/user-template/" > "${BUILD_LOG}" 2>&1
+    BUILD_EXIT=$?
+
+    # Gefilterten Output anzeigen
+    grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+    # Pruefe ob Build erfolgreich UND Image existiert
+    if [ $BUILD_EXIT -eq 0 ] && docker image inspect user-service-template:latest >/dev/null 2>&1; then
         echo ""
         echo -e "  user-service-template: ${GREEN}OK${NC}"
     else
         echo ""
         echo -e "  user-service-template: ${RED}FEHLER${NC}"
-        echo "  Versuche erneut mit voller Ausgabe..."
-        docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/"
+        echo "  Build-Log:"
+        cat "${BUILD_LOG}"
         exit 1
     fi
 fi
@@ -400,9 +407,13 @@ if [ -d "${INSTALL_DIR}/user-template-next" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    if docker build --no-cache --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" 2>&1 | \
-       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
-       sed 's/^/        /'; then
+    BUILD_LOG="/tmp/build-user-template-next.log"
+    docker build --no-cache --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > "${BUILD_LOG}" 2>&1
+    BUILD_EXIT=$?
+
+    grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+    if [ $BUILD_EXIT -eq 0 ] && docker image inspect user-template-next:latest >/dev/null 2>&1; then
         echo ""
         echo -e "  user-template-next: ${GREEN}OK${NC}"
     else
@@ -413,15 +424,22 @@ fi
 
 # Spawner Backend Image bauen
 echo "  [3/4] Baue Spawner API (Flask Backend)..."
+echo ""
 
-if docker build --no-cache --progress=plain -t spawner:latest "${INSTALL_DIR}/" 2>&1 | \
-   grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
-   sed 's/^/        /'; then
+BUILD_LOG="/tmp/build-spawner.log"
+docker build --no-cache --progress=plain -t spawner:latest "${INSTALL_DIR}/" > "${BUILD_LOG}" 2>&1
+BUILD_EXIT=$?
+
+grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+if [ $BUILD_EXIT -eq 0 ] && docker image inspect spawner:latest >/dev/null 2>&1; then
+    echo ""
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
+    echo ""
     echo -e "  spawner-api: ${RED}FEHLER${NC}"
-    echo "  Versuche erneut mit voller Ausgabe..."
-    docker build --no-cache -t spawner:latest "${INSTALL_DIR}/"
+    echo "  Build-Log:"
+    cat "${BUILD_LOG}"
     exit 1
 fi
 
@@ -431,16 +449,20 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    if docker build --no-cache --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" 2>&1 | \
-       grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
-       sed 's/^/        /'; then
+    BUILD_LOG="/tmp/build-frontend.log"
+    docker build --no-cache --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > "${BUILD_LOG}" 2>&1
+    BUILD_EXIT=$?
+
+    grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+    if [ $BUILD_EXIT -eq 0 ] && docker image inspect spawner-frontend:latest >/dev/null 2>&1; then
         echo ""
         echo -e "  spawner-frontend: ${GREEN}OK${NC}"
     else
         echo ""
         echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
-        echo "  Versuche erneut mit voller Ausgabe..."
-        docker build --no-cache -t spawner-frontend:latest "${INSTALL_DIR}/frontend/"
+        echo "  Build-Log (letzte 50 Zeilen):"
+        tail -50 "${BUILD_LOG}"
         exit 1
     fi
 fi
