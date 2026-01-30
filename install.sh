@@ -15,7 +15,29 @@ VERSION="0.1.0"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Mindestversionen
+MIN_DOCKER_VERSION="20.10"
+MIN_COMPOSE_VERSION="2.0"
+
+# ============================================================
+# Hilfsfunktion: Versionen vergleichen
+# Gibt 0 zurueck wenn $1 >= $2, sonst 1
+# ============================================================
+version_gte() {
+    # Vergleiche zwei Versionen (z.B. "20.10.21" >= "20.10")
+    local ver1="$1"
+    local ver2="$2"
+
+    # Sortiere Versionen und pruefe ob ver1 >= ver2
+    if [ "$(printf '%s\n' "$ver2" "$ver1" | sort -V | head -n1)" = "$ver2" ]; then
+        return 0  # ver1 >= ver2
+    else
+        return 1  # ver1 < ver2
+    fi
+}
 
 echo ""
 echo "============================================================"
@@ -67,24 +89,52 @@ set +a
 echo ""
 echo "Pruefe Voraussetzungen..."
 
-# Docker
+# Docker - Existenz und Version pruefen
 if ! command -v docker >/dev/null 2>&1; then
     echo -e "${RED}Fehler: Docker nicht gefunden!${NC}"
     echo "Installiere Docker: https://docs.docker.com/get-docker/"
     exit 1
 fi
-echo -e "  Docker:         ${GREEN}OK${NC}"
 
-# Docker Compose
-if command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD="docker-compose"
-elif docker compose version >/dev/null 2>&1; then
-    COMPOSE_CMD="docker compose"
+# Docker Version extrahieren (z.B. "20.10.21" aus "Docker version 20.10.21, build baeda1f")
+DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker version | grep -oP 'version \K[0-9.]+' | head -1)
+if [ -z "$DOCKER_VERSION" ]; then
+    echo -e "${YELLOW}Warnung: Docker-Version konnte nicht ermittelt werden${NC}"
+    echo -e "  Docker:         ${YELLOW}OK${NC} (Version unbekannt, min. ${MIN_DOCKER_VERSION} empfohlen)"
+elif version_gte "$DOCKER_VERSION" "$MIN_DOCKER_VERSION"; then
+    echo -e "  Docker:         ${GREEN}OK${NC} (v${DOCKER_VERSION})"
 else
-    echo -e "${RED}Fehler: docker-compose nicht gefunden!${NC}"
+    echo -e "${RED}Fehler: Docker-Version ${DOCKER_VERSION} ist zu alt!${NC}"
+    echo "Mindestversion: ${MIN_DOCKER_VERSION}"
+    echo "Aktualisiere Docker: https://docs.docker.com/get-docker/"
     exit 1
 fi
-echo -e "  Docker Compose: ${GREEN}OK${NC} (${COMPOSE_CMD})"
+
+# Docker Compose - Existenz und Version pruefen
+COMPOSE_VERSION=""
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+    # Version extrahieren (z.B. "2.21.0" aus "Docker Compose version v2.21.0")
+    COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || docker compose version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+    COMPOSE_VERSION=$(docker-compose version --short 2>/dev/null || docker-compose version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+else
+    echo -e "${RED}Fehler: Docker Compose nicht gefunden!${NC}"
+    echo "Docker Compose ist Teil von Docker Desktop oder kann separat installiert werden."
+    exit 1
+fi
+
+if [ -z "$COMPOSE_VERSION" ]; then
+    echo -e "  Docker Compose: ${YELLOW}OK${NC} (${COMPOSE_CMD}, Version unbekannt)"
+elif version_gte "$COMPOSE_VERSION" "$MIN_COMPOSE_VERSION"; then
+    echo -e "  Docker Compose: ${GREEN}OK${NC} (v${COMPOSE_VERSION})"
+else
+    echo -e "${RED}Fehler: Docker Compose Version ${COMPOSE_VERSION} ist zu alt!${NC}"
+    echo "Mindestversion: ${MIN_COMPOSE_VERSION}"
+    echo "Aktualisiere Docker Compose: https://docs.docker.com/compose/install/"
+    exit 1
+fi
 
 # Git
 if ! command -v git >/dev/null 2>&1; then
@@ -187,13 +237,83 @@ echo "Pruefe Docker-Netzwerk: ${NETWORK}"
 if docker network inspect "${NETWORK}" >/dev/null 2>&1; then
     echo -e "  Netzwerk '${NETWORK}': ${GREEN}existiert${NC}"
 else
-    echo -e "  ${YELLOW}Netzwerk '${NETWORK}' nicht gefunden - erstelle...${NC}"
-    docker network create "${NETWORK}"
-    echo -e "  Netzwerk '${NETWORK}': ${GREEN}erstellt${NC}"
+    echo -e "${RED}Fehler: Docker-Netzwerk '${NETWORK}' existiert nicht!${NC}"
+    echo ""
+    echo "Das Netzwerk muss von Traefik erstellt werden oder bereits existieren."
+    echo "Stelle sicher, dass Traefik laeuft und das Netzwerk '${NETWORK}' verwendet."
+    echo ""
+    echo "Optionen:"
+    echo "  1. Starte Traefik zuerst (empfohlen)"
+    echo "  2. Erstelle das Netzwerk manuell: docker network create ${NETWORK}"
+    echo ""
+    read -p "Netzwerk jetzt manuell erstellen? (j/N): " create_network
+    if [ "$create_network" = "j" ] || [ "$create_network" = "J" ]; then
+        docker network create "${NETWORK}"
+        echo -e "  Netzwerk '${NETWORK}': ${GREEN}erstellt${NC}"
+    else
+        exit 1
+    fi
 fi
 
 # ============================================================
-# 6. Docker-Images bauen
+# 6. Pruefe ob Traefik laeuft
+# ============================================================
+echo ""
+echo "Pruefe Traefik..."
+
+# Suche nach laufenden Traefik-Containern
+TRAEFIK_CONTAINER=$(docker ps --filter "name=traefik" --filter "status=running" --format "{{.Names}}" 2>/dev/null | head -1)
+
+# Falls nicht nach Name gefunden, suche nach Image
+if [ -z "$TRAEFIK_CONTAINER" ]; then
+    TRAEFIK_CONTAINER=$(docker ps --filter "ancestor=traefik" --filter "status=running" --format "{{.Names}}" 2>/dev/null | head -1)
+fi
+
+# Falls immer noch nicht gefunden, suche nach Label (traefik.enable=true auf sich selbst)
+if [ -z "$TRAEFIK_CONTAINER" ]; then
+    TRAEFIK_CONTAINER=$(docker ps --filter "status=running" --format "{{.Names}}" 2>/dev/null | while read name; do
+        if docker inspect "$name" 2>/dev/null | grep -q '"traefik.http.routers\|"com.docker.compose.service": "traefik"'; then
+            echo "$name"
+            break
+        fi
+    done)
+fi
+
+if [ -n "$TRAEFIK_CONTAINER" ]; then
+    # Pruefe Traefik-Version
+    TRAEFIK_VERSION=$(docker exec "$TRAEFIK_CONTAINER" traefik version 2>/dev/null | grep -oP 'Version:\s*\K[0-9.]+' || echo "unbekannt")
+    echo -e "  Traefik:        ${GREEN}laeuft${NC} (Container: ${TRAEFIK_CONTAINER}, v${TRAEFIK_VERSION})"
+
+    # Pruefe ob Traefik am gleichen Netzwerk haengt
+    TRAEFIK_NETWORKS=$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null)
+    if echo "$TRAEFIK_NETWORKS" | grep -q "$NETWORK"; then
+        echo -e "  Traefik-Netzwerk: ${GREEN}OK${NC} (verbunden mit '${NETWORK}')"
+    else
+        echo -e "  ${YELLOW}Warnung: Traefik ist nicht mit Netzwerk '${NETWORK}' verbunden${NC}"
+        echo "  Traefik-Netzwerke: ${TRAEFIK_NETWORKS}"
+        echo "  Stelle sicher, dass TRAEFIK_NETWORK in .env korrekt konfiguriert ist."
+    fi
+else
+    echo -e "  ${YELLOW}Warnung: Kein laufender Traefik-Container gefunden!${NC}"
+    echo ""
+    echo "  Traefik wird fuer das Routing der User-Container benoetigt."
+    echo "  Der Spawner kann ohne Traefik gestartet werden, aber:"
+    echo "    - User-Container sind nur lokal erreichbar"
+    echo "    - Kein automatisches HTTPS"
+    echo "    - Kein Subdomain-Routing"
+    echo ""
+    read -p "  Trotzdem fortfahren? (j/N): " continue_without_traefik
+    if [ "$continue_without_traefik" != "j" ] && [ "$continue_without_traefik" != "J" ]; then
+        echo ""
+        echo "Installation abgebrochen."
+        echo "Starte zuerst Traefik und fuehre dann erneut 'bash install.sh' aus."
+        exit 1
+    fi
+    echo -e "  ${YELLOW}Fortfahren ohne Traefik...${NC}"
+fi
+
+# ============================================================
+# 7. Docker-Images bauen
 # ============================================================
 echo ""
 echo "Baue Docker-Images..."
@@ -253,7 +373,7 @@ echo ""
 echo "Alle Images erfolgreich gebaut."
 
 # ============================================================
-# 7. Container starten
+# 8. Container starten
 # ============================================================
 echo ""
 echo "Starte Container..."
@@ -280,7 +400,7 @@ else
 fi
 
 # ============================================================
-# 8. Fertig
+# 9. Fertig
 # ============================================================
 echo ""
 echo "============================================================"
