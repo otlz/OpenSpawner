@@ -183,40 +183,56 @@ echo -e "  Git:            ${GREEN}OK${NC}"
 # 3. Pruefe ob bereits installiert (Update vs. Neuinstallation)
 # ============================================================
 echo ""
+
+# Git safe.directory setzen (fuer NAS/Container-Umgebungen)
+git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
+
 if [ -d "${INSTALL_DIR}/.git" ]; then
     echo -e "${YELLOW}Update erkannt - hole neueste Aenderungen...${NC}"
 
-    # Sichere lokale Aenderungen
-    if ! git diff --quiet 2>/dev/null; then
+    cd "${INSTALL_DIR}"
+
+    # Sichere lokale Aenderungen (ignoriere Fehler)
+    if git diff --quiet 2>/dev/null; then
+        : # Keine Aenderungen
+    else
         echo "Lokale Aenderungen gefunden, erstelle Stash..."
-        git stash
+        git stash 2>/dev/null || true
     fi
 
-    git fetch origin
-    git pull origin main
-
-    echo -e "${GREEN}Repository aktualisiert${NC}"
+    # Update durchfuehren
+    if git fetch origin 2>/dev/null && git pull origin main 2>/dev/null; then
+        echo -e "${GREEN}Repository aktualisiert${NC}"
+    else
+        echo -e "${YELLOW}Git-Update fehlgeschlagen, fahre mit lokalen Dateien fort...${NC}"
+    fi
 else
     echo "Neuinstallation - klone Repository..."
 
     # Temporaeres Verzeichnis fuer Clone
     TEMP_DIR=$(mktemp -d)
-    git clone "${REPO_URL}" "${TEMP_DIR}"
 
-    # Kopiere Dateien (ueberschreibt nicht .env)
-    shopt -s dotglob
-    for item in "${TEMP_DIR}"/*; do
-        basename_item=$(basename "$item")
-        if [ "$basename_item" != ".env" ] && [ "$basename_item" != ".git" ]; then
-            cp -r "$item" "${INSTALL_DIR}/"
-        fi
-    done
+    if git clone "${REPO_URL}" "${TEMP_DIR}"; then
+        # Kopiere Dateien (ueberschreibt nicht .env)
+        shopt -s dotglob 2>/dev/null || true
+        for item in "${TEMP_DIR}"/*; do
+            basename_item=$(basename "$item")
+            if [ "$basename_item" != ".env" ] && [ "$basename_item" != ".git" ]; then
+                cp -r "$item" "${INSTALL_DIR}/"
+            fi
+        done
 
-    # .git Verzeichnis kopieren fuer Updates
-    cp -r "${TEMP_DIR}/.git" "${INSTALL_DIR}/"
+        # .git Verzeichnis kopieren fuer Updates
+        cp -r "${TEMP_DIR}/.git" "${INSTALL_DIR}/"
 
-    rm -rf "${TEMP_DIR}"
-    echo -e "${GREEN}Repository geklont${NC}"
+        rm -rf "${TEMP_DIR}"
+        echo -e "${GREEN}Repository geklont${NC}"
+    else
+        echo -e "${RED}Fehler: Repository konnte nicht geklont werden!${NC}"
+        echo "URL: ${REPO_URL}"
+        rm -rf "${TEMP_DIR}"
+        exit 1
+    fi
 fi
 
 # ============================================================
