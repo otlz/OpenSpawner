@@ -52,12 +52,12 @@ services:
       - "traefik.http.routers.spawner-api.service=spawner-api-service"
       - "traefik.http.services.spawner-api-service.loadbalancer.server.port=5000"
 
-      # Legacy-Router fuer alte Flask-Templates (niedrige Prioritaet)
-      - "traefik.http.routers.spawner-legacy.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && (PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/logout`) || PathPrefix(`/dashboard`) || PathPrefix(`/container`) || PathPrefix(`/health`))"
-      - "traefik.http.routers.spawner-legacy.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.spawner-legacy.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
-      - "traefik.http.routers.spawner-legacy.priority=100"
-      - "traefik.http.routers.spawner-legacy.service=spawner-api-service"
+      # Health-Router (nur fuer /health Endpoint)
+      - "traefik.http.routers.spawner-health.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/health`)"
+      - "traefik.http.routers.spawner-health.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-health.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-health.priority=100"
+      - "traefik.http.routers.spawner-health.service=spawner-api-service"
 
       # Metadata
       - "spawner.managed=true"
