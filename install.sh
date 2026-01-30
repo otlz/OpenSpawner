@@ -382,7 +382,7 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
 
     # Build ausfuehren und Output in Datei speichern
     BUILD_LOG="/tmp/build-user-template.log"
-    docker build --no-cache --progress=plain -t user-service-template:latest "${INSTALL_DIR}/user-template/" > "${BUILD_LOG}" 2>&1
+    docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/" > "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     # Gefilterten Output anzeigen
@@ -408,7 +408,7 @@ if [ -d "${INSTALL_DIR}/user-template-next" ]; then
     echo ""
 
     BUILD_LOG="/tmp/build-user-template-next.log"
-    docker build --no-cache --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > "${BUILD_LOG}" 2>&1
+    docker build --no-cache -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
@@ -427,7 +427,7 @@ echo "  [3/4] Baue Spawner API (Flask Backend)..."
 echo ""
 
 BUILD_LOG="/tmp/build-spawner.log"
-docker build --no-cache --progress=plain -t spawner:latest "${INSTALL_DIR}/" > "${BUILD_LOG}" 2>&1
+docker build --no-cache -t spawner:latest "${INSTALL_DIR}/" > "${BUILD_LOG}" 2>&1
 BUILD_EXIT=$?
 
 grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
@@ -450,7 +450,7 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo ""
 
     BUILD_LOG="/tmp/build-frontend.log"
-    docker build --no-cache --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > "${BUILD_LOG}" 2>&1
+    docker build --no-cache -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
