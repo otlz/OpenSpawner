@@ -19,6 +19,39 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.0] - 2026-01-31
+
+### Hinzugefuegt
+- Synology NAS / BusyBox Kompatibilitaet im Installationsskript
+- Automatische Docker-Version Pruefung (>= 20.10)
+- Automatische Docker Compose Version Pruefung (>= 2.0)
+- Traefik-Laufzeit-Pruefung im Installationsskript
+- Traefik-Netzwerk-Verbindungspruefung
+- Build-Fortschrittsanzeige mit gefilterten Logs
+- Automatische `git safe.directory` Konfiguration fuer NAS-Umgebungen
+
+### Geaendert
+- `auth.py`: Redirect zum Frontend statt Jinja2-Templates
+- `docker-compose.yml`: Legacy-Router entfernt (verhindert Redirect-Loop)
+- Dockerfiles: Fallback auf `npm install` wenn `package-lock.json` fehlt
+- `--progress=plain` Flag entfernt (nicht kompatibel mit aelteren Docker-Versionen)
+- Build-Verifikation prueft jetzt Exit-Code UND Image-Existenz
+
+### Behoben
+- Redirect-Loop bei `/login` und `/signup` behoben
+- `@/lib/utils` Module-Not-Found Fehler in Next.js Projekten
+- `.gitignore` blockierte `frontend/src/lib/` und `user-template-next/src/lib/`
+- `tsconfig.json` fehlte `baseUrl` fuer TypeScript Path Aliases
+- Docker Build meldete faelschlicherweise "OK" bei Fehlern
+
+### Entfernt
+- `templates/` Verzeichnis (alte Jinja2 Templates, ersetzt durch Next.js Frontend)
+
+### Sicherheit
+- Keine sensiblen Dateien (`.env`, `CLAUDE.md`) werden ins Repository kopiert
+
+---
+
 ## [0.1.0] - 2026-01-30
 
 ### Hinzugefuegt

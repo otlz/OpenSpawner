@@ -347,4 +347,82 @@ chown -R 1000:1000 /volume1/docker/spawner/logs
 
 ---
 
+## Synology NAS / BusyBox Kompatibilitaet
+
+Das Installationsskript ist vollstaendig kompatibel mit Synology NAS und anderen BusyBox-basierten Systemen.
+
+### Automatische Anpassungen
+
+Das Skript erkennt und behandelt automatisch:
+
+| Problem | Loesung |
+|---------|---------|
+| `git safe.directory` Fehler | Automatische Konfiguration |
+| Kein `sort -V` (Versionsort) | Eigene Versionsvergleich-Funktion |
+| Kein `grep -P` (Perl-Regex) | POSIX-kompatible Alternativen |
+| Kein `--progress=plain` | Flag wird nicht verwendet |
+| Aeltere Docker-Version | BuildKit-Features deaktiviert |
+
+### Bekannte Einschraenkungen auf Synology
+
+1. **Build-Zeit**: Docker-Builds dauern laenger (5-15 Min fuer Next.js)
+2. **RAM**: Mindestens 4 GB RAM empfohlen
+3. **Docker-Version**: Synology verwendet oft aeltere Docker-Versionen
+
+### Manuelle Vorbereitung (optional)
+
+```bash
+# Als root auf der Synology einloggen
+sudo -i
+
+# In Installationsverzeichnis wechseln
+cd /volume1/docker
+mkdir spawner
+cd spawner
+
+# Installation starten
+curl -sSL https://gitea.iotxs.de/RainerWieland/spawner/raw/branch/main/install.sh | bash
+```
+
+### Troubleshooting Synology
+
+#### "dubious ownership" Fehler
+
+Falls dieser Fehler auftritt:
+
+```bash
+git config --global --add safe.directory /volume1/docker/spawner
+```
+
+Das Skript macht dies automatisch, aber bei Problemen kann es manuell ausgefuehrt werden.
+
+#### Docker-Build schlaegt fehl
+
+```bash
+# Build-Logs pruefen
+cat /tmp/build-user-template.log
+cat /tmp/build-spawner.log
+cat /tmp/build-frontend.log
+
+# Images manuell bauen
+cd /volume1/docker/spawner
+docker build -t user-service-template:latest ./user-template/
+docker build -t spawner:latest .
+docker build -t spawner-frontend:latest ./frontend/
+```
+
+#### Container startet nicht
+
+```bash
+# Logs pruefen
+docker logs spawner
+docker logs spawner-frontend
+
+# Netzwerk pruefen
+docker network ls
+docker network inspect web
+```
+
+---
+
 Zurueck zur [Dokumentations-Uebersicht](../README.md)
