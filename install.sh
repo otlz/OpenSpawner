@@ -336,36 +336,82 @@ fi
 
 # User-Template-Next Image bauen (alternatives Template, optional)
 if [ -d "${INSTALL_DIR}/user-template-next" ]; then
-    echo "  [2/4] Baue user-template-next (alternatives Template)..."
-    if docker build -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > /dev/null 2>&1; then
+    echo "  [2/4] Baue user-template-next (Next.js Template)..."
+    echo -e "        ${BLUE}Dies kann einige Minuten dauern (npm install + build)...${NC}"
+
+    # Build mit Fortschrittsanzeige
+    docker build -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > /tmp/build-user-template-next.log 2>&1 &
+    BUILD_PID=$!
+
+    # Fortschrittsanzeige waehrend Build laeuft
+    printf "        "
+    while kill -0 $BUILD_PID 2>/dev/null; do
+        printf "."
+        sleep 2
+    done
+    printf "\n"
+
+    # Pruefe Build-Ergebnis
+    wait $BUILD_PID
+    BUILD_EXIT=$?
+
+    if [ $BUILD_EXIT -eq 0 ]; then
         echo -e "  user-template-next: ${GREEN}OK${NC}"
     else
         echo -e "  user-template-next: ${YELLOW}WARNUNG - Build fehlgeschlagen (optional)${NC}"
+        echo "        Details: /tmp/build-user-template-next.log"
     fi
 fi
 
 # Spawner Backend Image bauen
 echo "  [3/4] Baue Spawner API (Flask Backend)..."
-if docker build -t spawner:latest "${INSTALL_DIR}/" > /dev/null 2>&1; then
+docker build -t spawner:latest "${INSTALL_DIR}/" > /tmp/build-spawner.log 2>&1 &
+BUILD_PID=$!
+
+printf "        "
+while kill -0 $BUILD_PID 2>/dev/null; do
+    printf "."
+    sleep 1
+done
+printf "\n"
+
+wait $BUILD_PID
+BUILD_EXIT=$?
+
+if [ $BUILD_EXIT -eq 0 ]; then
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
     echo -e "  spawner-api: ${RED}FEHLER${NC}"
-    docker build -t spawner:latest "${INSTALL_DIR}/"
+    echo "  Build-Log:"
+    cat /tmp/build-spawner.log
     exit 1
 fi
 
 # Frontend Image bauen
 if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo "  [4/4] Baue Frontend (Next.js)..."
-    echo "        Dies kann einige Minuten dauern (npm install + build)..."
-    if docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" 2>&1 | grep -E "(error|Error|ERROR)" > /dev/null; then
-        echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
-        echo "  Versuche mit detaillierter Ausgabe..."
-        docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/"
-        exit 1
-    else
-        docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > /dev/null 2>&1
+    echo -e "        ${BLUE}Dies kann einige Minuten dauern (npm install + build)...${NC}"
+
+    docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > /tmp/build-frontend.log 2>&1 &
+    BUILD_PID=$!
+
+    printf "        "
+    while kill -0 $BUILD_PID 2>/dev/null; do
+        printf "."
+        sleep 2
+    done
+    printf "\n"
+
+    wait $BUILD_PID
+    BUILD_EXIT=$?
+
+    if [ $BUILD_EXIT -eq 0 ]; then
         echo -e "  spawner-frontend: ${GREEN}OK${NC}"
+    else
+        echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
+        echo "  Build-Log:"
+        tail -50 /tmp/build-frontend.log
+        exit 1
     fi
 fi
 
