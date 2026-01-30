@@ -384,7 +384,7 @@ if [ -d "${INSTALL_DIR}/user-template-next" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    if docker build --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" 2>&1 | \
+    if docker build --no-cache --progress=plain -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" 2>&1 | \
        grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
        sed 's/^/        /'; then
         echo ""
@@ -398,14 +398,14 @@ fi
 # Spawner Backend Image bauen
 echo "  [3/4] Baue Spawner API (Flask Backend)..."
 
-if docker build --progress=plain -t spawner:latest "${INSTALL_DIR}/" 2>&1 | \
+if docker build --no-cache --progress=plain -t spawner:latest "${INSTALL_DIR}/" 2>&1 | \
    grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
    sed 's/^/        /'; then
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
     echo -e "  spawner-api: ${RED}FEHLER${NC}"
     echo "  Versuche erneut mit voller Ausgabe..."
-    docker build -t spawner:latest "${INSTALL_DIR}/"
+    docker build --no-cache -t spawner:latest "${INSTALL_DIR}/"
     exit 1
 fi
 
@@ -415,7 +415,7 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    if docker build --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" 2>&1 | \
+    if docker build --no-cache --progress=plain -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" 2>&1 | \
        grep -E "^(Step |#[0-9]+ |Successfully|ERROR|error:)" | \
        sed 's/^/        /'; then
         echo ""
@@ -424,7 +424,7 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
         echo ""
         echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
         echo "  Versuche erneut mit voller Ausgabe..."
-        docker build -t spawner-frontend:latest "${INSTALL_DIR}/frontend/"
+        docker build --no-cache -t spawner-frontend:latest "${INSTALL_DIR}/frontend/"
         exit 1
     fi
 fi
