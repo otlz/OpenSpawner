@@ -102,6 +102,28 @@ export interface ContainerRestartResponse {
   status: string;
 }
 
+export interface Container {
+  type: string;
+  display_name: string;
+  description: string;
+  status: 'not_created' | 'running' | 'stopped' | 'error';
+  service_url: string;
+  container_id: string | null;
+  created_at: string | null;
+  last_used: string | null;
+}
+
+export interface ContainersResponse {
+  containers: Container[];
+}
+
+export interface LaunchResponse {
+  message: string;
+  service_url: string;
+  container_id: string;
+  status: string;
+}
+
 // ============================================================
 // Admin Interfaces
 // ============================================================
@@ -200,6 +222,15 @@ export const api = {
 
   restartContainer: () =>
     fetchApi<ContainerRestartResponse>("/api/container/restart", {
+      method: "POST",
+    }),
+
+  // Multi-Container Support
+  getUserContainers: () =>
+    fetchApi<ContainersResponse>("/api/user/containers"),
+
+  launchContainer: (containerType: string) =>
+    fetchApi<LaunchResponse>(`/api/container/launch/${containerType}`, {
       method: "POST",
     }),
 };

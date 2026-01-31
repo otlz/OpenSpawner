@@ -6,7 +6,7 @@ from flask_jwt_extended import (
     get_jwt
 )
 from datetime import timedelta, datetime
-from models import db, User, UserState, MagicLinkToken
+from models import db, User, UserState, MagicLinkToken, UserContainer
 from container_manager import ContainerManager
 from email_service import (
     generate_slug_from_email,
@@ -442,3 +442,140 @@ def check_if_token_revoked(jwt_header, jwt_payload):
     """Callback für flask-jwt-extended um revoked Tokens zu prüfen"""
     jti = jwt_payload['jti']
     return jti in token_blacklist
+
+
+# ============================================================
+# Multi-Container Support Endpoints
+# ============================================================
+
+@api_bp.route('/user/containers', methods=['GET'])
+@jwt_required()
+def api_user_containers():
+    """Gibt alle Container des Users zurück"""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User nicht gefunden'}), 404
+
+    # Container-Liste erstellen
+    containers = []
+    for container_type, template in current_app.config['CONTAINER_TEMPLATES'].items():
+        # Suche existierenden Container
+        user_container = UserContainer.query.filter_by(
+            user_id=user.id,
+            container_type=container_type
+        ).first()
+
+        # Service-URL
+        scheme = current_app.config['PREFERRED_URL_SCHEME']
+        spawner_domain = f"{current_app.config['SPAWNER_SUBDOMAIN']}.{current_app.config['BASE_DOMAIN']}"
+        slug_with_suffix = f"{user.slug}-{container_type}"
+        service_url = f"{scheme}://{spawner_domain}/{slug_with_suffix}"
+
+        # Status ermitteln
+        status = 'not_created'
+        if user_container and user_container.container_id:
+            try:
+                container_mgr = ContainerManager()
+                status = container_mgr.get_container_status(user_container.container_id)
+            except Exception:
+                status = 'error'
+
+        containers.append({
+            'type': container_type,
+            'display_name': template['display_name'],
+            'description': template['description'],
+            'status': status,
+            'service_url': service_url,
+            'container_id': user_container.container_id if user_container else None,
+            'created_at': user_container.created_at.isoformat() if user_container and user_container.created_at else None,
+            'last_used': user_container.last_used.isoformat() if user_container and user_container.last_used else None
+        })
+
+    return jsonify({'containers': containers}), 200
+
+
+@api_bp.route('/container/launch/<container_type>', methods=['POST'])
+@jwt_required()
+def api_container_launch(container_type):
+    """Erstellt Container on-demand und gibt Service-URL zurück"""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User nicht gefunden'}), 404
+
+    # Prüfe ob Typ valide
+    if container_type not in current_app.config['CONTAINER_TEMPLATES']:
+        return jsonify({'error': f'Ungültiger Container-Typ: {container_type}'}), 400
+
+    # Prüfe ob Container bereits existiert
+    user_container = UserContainer.query.filter_by(
+        user_id=user.id,
+        container_type=container_type
+    ).first()
+
+    container_mgr = ContainerManager()
+
+    if user_container and user_container.container_id:
+        # Container existiert - Status prüfen
+        try:
+            status = container_mgr.get_container_status(user_container.container_id)
+            if status != 'running':
+                # Container neu starten
+                container_mgr.start_container(user_container.container_id)
+                current_app.logger.info(f"[MULTI-CONTAINER] Container {user_container.container_id[:12]} neu gestartet")
+
+            # last_used aktualisieren
+            user_container.last_used = datetime.utcnow()
+            db.session.commit()
+
+        except Exception as e:
+            # Container existiert nicht mehr - neu erstellen
+            current_app.logger.warning(f"Container {user_container.container_id[:12]} nicht gefunden, erstelle neuen: {str(e)}")
+            try:
+                template = current_app.config['CONTAINER_TEMPLATES'][container_type]
+                container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, container_type)
+                user_container.container_id = container_id
+                user_container.container_port = port
+                user_container.last_used = datetime.utcnow()
+                db.session.commit()
+                current_app.logger.info(f"[MULTI-CONTAINER] Neuer {container_type} Container erstellt für {user.email}")
+            except Exception as spawn_error:
+                current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(spawn_error)}")
+                return jsonify({'error': 'Container konnte nicht erstellt werden'}), 500
+    else:
+        # Container existiert noch nicht - neu erstellen
+        try:
+            template = current_app.config['CONTAINER_TEMPLATES'][container_type]
+            container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, container_type)
+
+            user_container = UserContainer(
+                user_id=user.id,
+                container_type=container_type,
+                container_id=container_id,
+                container_port=port,
+                template_image=template['image'],
+                last_used=datetime.utcnow()
+            )
+            db.session.add(user_container)
+            db.session.commit()
+
+            current_app.logger.info(f"[MULTI-CONTAINER] {container_type} Container erstellt für {user.email}")
+        except Exception as e:
+            current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
+            return jsonify({'error': f'Container konnte nicht erstellt werden: {str(e)}'}), 500
+
+    # Service-URL generieren
+    scheme = current_app.config['PREFERRED_URL_SCHEME']
+    spawner_domain = f"{current_app.config['SPAWNER_SUBDOMAIN']}.{current_app.config['BASE_DOMAIN']}"
+    slug_with_suffix = f"{user.slug}-{container_type}"
+    service_url = f"{scheme}://{spawner_domain}/{slug_with_suffix}"
+
+    return jsonify({
+        'message': 'Container bereit',
+        'service_url': service_url,
+        'container_id': user_container.container_id,
+        'status': 'running'
+    }), 200

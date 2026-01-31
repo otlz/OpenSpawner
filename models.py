@@ -18,8 +18,6 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     slug = db.Column(db.String(12), unique=True, nullable=False, index=True)
-    container_id = db.Column(db.String(100), nullable=True)
-    container_port = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Admin-Felder
@@ -38,6 +36,9 @@ class User(UserMixin, db.Model):
 
     # Beziehung fuer blocked_by
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
+
+    # Multi-Container Support
+    containers = db.relationship('UserContainer', back_populates='user', cascade='all, delete-orphan')
 
     def to_dict(self):
         """Konvertiert User zu Dictionary fuer API-Responses"""
@@ -81,6 +82,41 @@ class MagicLinkToken(db.Model):
     def mark_as_used(self):
         """Markiert Token als verwendet"""
         self.used_at = datetime.utcnow()
+
+
+class UserContainer(db.Model):
+    """Multi-Container pro User (dev und prod)"""
+    __tablename__ = 'user_container'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    container_type = db.Column(db.String(50), nullable=False)  # 'dev' oder 'prod'
+    container_id = db.Column(db.String(100), unique=True)
+    container_port = db.Column(db.Integer)
+    template_image = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used = db.Column(db.DateTime)
+
+    # Relationship
+    user = db.relationship('User', back_populates='containers')
+
+    # Unique: Ein User kann nur einen Container pro Typ haben
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'container_type', name='uq_user_container_type'),
+    )
+
+    def to_dict(self):
+        """Konvertiert UserContainer zu Dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'container_type': self.container_type,
+            'container_id': self.container_id,
+            'container_port': self.container_port,
+            'template_image': self.template_image,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_used': self.last_used.isoformat() if self.last_used else None
+        }
 
 
 class AdminTakeoverSession(db.Model):

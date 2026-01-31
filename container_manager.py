@@ -137,3 +137,94 @@ class ContainerManager:
     def _get_container_port(self, container):
         """Extrahiert Port aus Container-Config"""
         return 8080
+
+    def spawn_multi_container(self, user_id: int, slug: str, container_type: str) -> tuple:
+        """
+        Spawnt einen Container für einen User mit bestimmtem Typ
+
+        Args:
+            user_id: User ID
+            slug: User Slug (für URL)
+            container_type: 'dev' oder 'prod'
+
+        Returns:
+            (container_id, container_port)
+        """
+        try:
+            # Template-Config holen
+            template = Config.CONTAINER_TEMPLATES.get(container_type)
+            if not template:
+                raise ValueError(f"Ungültiger Container-Typ: {container_type}")
+
+            image = template['image']
+            container_name = f"user-{slug}-{container_type}-{user_id}"
+
+            # Traefik Labels mit Suffix
+            slug_with_suffix = f"{slug}-{container_type}"
+            base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
+
+            labels = {
+                'traefik.enable': 'true',
+                'traefik.docker.network': Config.TRAEFIK_NETWORK,
+
+                # HTTPS Router mit PathPrefix
+                f'traefik.http.routers.user{user_id}-{container_type}.rule':
+                    f'Host(`{base_host}`) && PathPrefix(`/{slug_with_suffix}`)',
+                f'traefik.http.routers.user{user_id}-{container_type}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
+                f'traefik.http.routers.user{user_id}-{container_type}.priority': '100',
+                # StripPrefix Middleware - entfernt /{slug_with_suffix} bevor Container Request erhält
+                f'traefik.http.routers.user{user_id}-{container_type}.middlewares': f'user{user_id}-{container_type}-strip',
+                f'traefik.http.middlewares.user{user_id}-{container_type}-strip.stripprefix.prefixes': f'/{slug_with_suffix}',
+                # TLS für HTTPS
+                f'traefik.http.routers.user{user_id}-{container_type}.tls': 'true',
+                f'traefik.http.routers.user{user_id}-{container_type}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
+
+                # Service
+                f'traefik.http.services.user{user_id}-{container_type}.loadbalancer.server.port': '8080',
+
+                # Metadata
+                'spawner.user_id': str(user_id),
+                'spawner.slug': slug,
+                'spawner.container_type': container_type,
+                'spawner.managed': 'true'
+            }
+
+            # Logging: Traefik-Labels ausgeben
+            print(f"[SPAWNER] Creating {container_type} container user-{slug}-{container_type}-{user_id}")
+            print(f"[SPAWNER] Image: {image}")
+            print(f"[SPAWNER] Traefik Labels:")
+            for key, value in labels.items():
+                if 'traefik' in key:
+                    print(f"[SPAWNER]   {key}: {value}")
+
+            container = self._get_client().containers.run(
+                image=image,
+                name=container_name,
+                detach=True,
+                network=Config.TRAEFIK_NETWORK,
+                labels=labels,
+                environment={
+                    'USER_ID': str(user_id),
+                    'USER_SLUG': slug,
+                    'CONTAINER_TYPE': container_type
+                },
+                restart_policy={'Name': 'unless-stopped'},
+                mem_limit=Config.DEFAULT_MEMORY_LIMIT,
+                cpu_quota=Config.DEFAULT_CPU_QUOTA
+            )
+
+            print(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
+            print(f"[SPAWNER] URL: {Config.PREFERRED_URL_SCHEME}://{base_host}/{slug_with_suffix}")
+            return container.id, 8080
+
+        except docker.errors.ImageNotFound as e:
+            error_msg = f"Template-Image '{template['image']}' für Typ '{container_type}' nicht gefunden"
+            print(f"[SPAWNER] ERROR: {error_msg}")
+            raise Exception(error_msg)
+        except docker.errors.APIError as e:
+            error_msg = f"Docker API Fehler: {str(e)}"
+            print(f"[SPAWNER] ERROR: {error_msg}")
+            raise Exception(error_msg)
+        except Exception as e:
+            print(f"[SPAWNER] ERROR: {str(e)}")
+            raise

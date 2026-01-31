@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { api, UserResponse } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { api, type Container } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -12,106 +11,109 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Container,
   ExternalLink,
-  RefreshCw,
-  LogOut,
   Loader2,
-  CheckCircle2,
-  XCircle,
+  Play,
+  CheckCircle,
   AlertCircle,
+  LogOut,
   Shield,
+  Container as ContainerIcon,
 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 
 export default function DashboardPage() {
-  const { user, logout, isLoading: authLoading } = useAuth();
   const router = useRouter();
-
-  const [userData, setUserData] = useState<UserResponse | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isRestarting, setIsRestarting] = useState(false);
+  const { user, logout, isLoading: authLoading } = useAuth();
+  const [containers, setContainers] = useState<Container[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [launching, setLaunching] = useState<string | null>(null);
   const [error, setError] = useState("");
-
-  const fetchUserData = useCallback(async () => {
-    const { data, error } = await api.getUser();
-    if (data) {
-      setUserData(data);
-    } else if (error) {
-      setError(error);
-    }
-  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.replace("/login");
-    } else if (user) {
-      fetchUserData();
+      router.push("/login");
+      return;
     }
-  }, [user, authLoading, router, fetchUserData]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await fetchUserData();
-    setIsRefreshing(false);
+    if (user) {
+      loadContainers();
+    }
+  }, [user, authLoading, router]);
+
+  const loadContainers = async () => {
+    try {
+      setError("");
+      const { data, error: apiError } = await api.getUserContainers();
+      if (data) {
+        setContainers(data.containers);
+      } else if (apiError) {
+        setError(apiError);
+      }
+    } catch (err) {
+      setError("Fehler beim Laden der Container");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRestart = async () => {
-    setIsRestarting(true);
+  const handleLaunchContainer = async (containerType: string) => {
+    setLaunching(containerType);
     setError("");
-
-    const { data, error } = await api.restartContainer();
-
-    if (error) {
-      setError(error);
-    } else {
-      await fetchUserData();
+    try {
+      const { data, error: apiError } = await api.launchContainer(
+        containerType
+      );
+      if (data) {
+        // Container erfolgreich gestartet - öffne in neuem Tab
+        window.open(data.service_url, "_blank");
+        // Reload Container-Liste
+        await loadContainers();
+      } else if (apiError) {
+        setError(apiError);
+      }
+    } catch (err) {
+      setError("Fehler beim Starten des Containers");
+    } finally {
+      setLaunching(null);
     }
+  };
 
-    setIsRestarting(false);
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "running":
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case "stopped":
+        return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      case "error":
+        return <AlertCircle className="h-5 w-5 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "running":
+        return "Läuft";
+      case "stopped":
+        return "Gestoppt";
+      case "error":
+        return "Fehler";
+      case "not_created":
+        return "Noch nicht erstellt";
+      default:
+        return status;
+    }
   };
 
   const handleLogout = async () => {
     await logout();
     router.push("/login");
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "running":
-        return (
-          <Badge variant="success" className="gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Lauft
-          </Badge>
-        );
-      case "exited":
-      case "stopped":
-        return (
-          <Badge variant="destructive" className="gap-1">
-            <XCircle className="h-3 w-3" />
-            Gestoppt
-          </Badge>
-        );
-      case "no_container":
-        return (
-          <Badge variant="warning" className="gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Kein Container
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <AlertCircle className="h-3 w-3" />
-            {status}
-          </Badge>
-        );
-    }
   };
 
   if (authLoading || !user) {
@@ -128,7 +130,7 @@ export default function DashboardPage() {
       <header className="border-b bg-background">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <Container className="h-6 w-6 text-primary" />
+            <ContainerIcon className="h-6 w-6 text-primary" />
             <span className="text-lg font-semibold">Container Spawner</span>
           </div>
           <div className="flex items-center gap-4">
@@ -163,11 +165,11 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto p-4 md:p-8">
+      <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Verwalte deinen personlichen Container
+            Verwalte deine Development- und Production-Container
           </p>
         </div>
 
@@ -177,155 +179,81 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Container Status Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Container className="h-5 w-5" />
-                Container Status
-              </CardTitle>
-              <CardDescription>
-                Informationen zu deinem personlichen Container
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status</span>
-                {userData ? (
-                  getStatusBadge(userData.container.status)
-                ) : (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Container ID
-                </span>
-                <code className="rounded bg-muted px-2 py-1 text-xs">
-                  {userData?.container.id?.slice(0, 12) || "-"}
-                </code>
-              </div>
-              <Separator />
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                >
-                  {isRefreshing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Aktualisieren
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleRestart}
-                  disabled={isRestarting}
-                >
-                  {isRestarting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Neu starten
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
+            {containers.map((container) => (
+              <Card key={container.type} className="relative">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <ContainerIcon className="h-5 w-5" />
+                        {container.display_name}
+                      </CardTitle>
+                      <CardDescription>{container.description}</CardDescription>
+                    </div>
+                    {getStatusIcon(container.status)}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-sm">
+                      <p className="text-muted-foreground">Status:</p>
+                      <p className="font-medium">{getStatusText(container.status)}</p>
+                    </div>
 
-          {/* Service URL Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ExternalLink className="h-5 w-5" />
-                Dein Service
-              </CardTitle>
-              <CardDescription>
-                Zugriff auf deinen personlichen Bereich
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-md border bg-muted/50 p-4">
-                <p className="mb-2 text-sm text-muted-foreground">
-                  Deine Service-URL:
-                </p>
-                {userData?.container.service_url ? (
-                  <a
-                    href={userData.container.service_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-primary hover:underline"
-                  >
-                    {userData.container.service_url}
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">Laden...</span>
-                )}
-              </div>
-              <Button
-                className="w-full"
-                asChild
-                disabled={
-                  !userData?.container.service_url ||
-                  userData?.container.status !== "running"
-                }
-              >
-                <a
-                  href={userData?.container.service_url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Service offnen
-                </a>
-              </Button>
-              {userData?.container.status !== "running" && (
-                <p className="text-center text-sm text-muted-foreground">
-                  Container muss laufen, um den Service zu nutzen
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                    {container.last_used && (
+                      <div className="text-sm">
+                        <p className="text-muted-foreground">Zuletzt verwendet:</p>
+                        <p className="font-medium">
+                          {new Date(container.last_used).toLocaleString("de-DE")}
+                        </p>
+                      </div>
+                    )}
 
-          {/* User Info Card */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Kontoinformationen</CardTitle>
-              <CardDescription>Deine personlichen Daten</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">E-Mail</p>
-                  <p className="font-medium">{user.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Container Slug</p>
-                  <code className="font-medium text-sm bg-muted px-2 py-1 rounded">
-                    {user.slug}
-                  </code>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Registriert</p>
-                  <p className="font-medium">
-                    {userData?.user.created_at
-                      ? new Date(userData.user.created_at).toLocaleDateString(
-                          "de-DE"
-                        )
-                      : "-"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                    <div className="flex gap-2">
+                      {container.status === "running" ? (
+                        <Button
+                          className="flex-1"
+                          onClick={() =>
+                            window.open(container.service_url, "_blank")
+                          }
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Service öffnen
+                        </Button>
+                      ) : (
+                        <Button
+                          className="flex-1"
+                          onClick={() => handleLaunchContainer(container.type)}
+                          disabled={launching === container.type}
+                        >
+                          {launching === container.type ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Wird gestartet...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-2 h-4 w-4" />
+                              {container.status === "not_created"
+                                ? "Erstellen & Öffnen"
+                                : "Starten & Öffnen"}
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

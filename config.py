@@ -39,6 +39,20 @@ class Config:
     # ========================================
     DOCKER_SOCKET = os.getenv('DOCKER_SOCKET', 'unix://var/run/docker.sock')
     USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'user-service-template:latest')
+
+    # Multi-Container Templates
+    CONTAINER_TEMPLATES = {
+        'dev': {
+            'image': os.getenv('USER_TEMPLATE_IMAGE_DEV', 'user-service-template:latest'),
+            'display_name': 'Development Container',
+            'description': 'Nginx-basierter Development Container'
+        },
+        'prod': {
+            'image': os.getenv('USER_TEMPLATE_IMAGE_PROD', 'user-template-next:latest'),
+            'display_name': 'Production Container',
+            'description': 'Next.js Production Build'
+        }
+    }
     
     # ========================================
     # Traefik/Domain-Konfiguration
