@@ -22,7 +22,6 @@ import {
   Shield,
   ShieldOff,
   Trash2,
-  KeyRound,
   Mail,
   RefreshCw,
   LogOut,
@@ -152,20 +151,6 @@ export default function AdminPage() {
     } else {
       showSuccess(data?.message || "User entsperrt");
       fetchUsers();
-    }
-    setActionLoading(null);
-  };
-
-  const handleResetPassword = async (userId: number) => {
-    if (!confirm("Passwort zuruecksetzen? Der User erhaelt eine Email mit dem neuen Passwort.")) {
-      return;
-    }
-    setActionLoading(userId);
-    const { data, error } = await adminApi.resetPassword(userId);
-    if (error) {
-      setError(error);
-    } else {
-      showSuccess(data?.message || "Passwort zurueckgesetzt");
     }
     setActionLoading(null);
   };
@@ -488,14 +473,14 @@ export default function AdminPage() {
                             </Button>
                           )}
 
-                          {/* Passwort zuruecksetzen */}
+                          {/* Login-Link erneut senden */}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleResetPassword(u.id)}
-                            title="Passwort zuruecksetzen"
+                            onClick={() => handleResendVerification(u.id)}
+                            title="Login-Link erneut senden"
                           >
-                            <KeyRound className="h-4 w-4" />
+                            <Mail className="h-4 w-4" />
                           </Button>
 
                           {/* Container loeschen */}
