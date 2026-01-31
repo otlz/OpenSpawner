@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
-export default function VerifySignupPage() {
+function VerifySignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { verifySignup } = useAuth();
@@ -119,5 +119,19 @@ export default function VerifySignupPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function VerifySignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <VerifySignupContent />
+    </Suspense>
   );
 }
