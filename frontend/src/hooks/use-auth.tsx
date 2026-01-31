@@ -9,10 +9,12 @@ import {
 } from "react";
 import { api, LoginResponse, UserResponse } from "@/lib/api";
 
-interface User {
+export interface User {
   id: number;
   username: string;
   email: string;
+  is_admin: boolean;
+  state: "registered" | "verified" | "active";
 }
 
 interface AuthContextType {
@@ -22,12 +24,12 @@ interface AuthContextType {
   login: (
     username: string,
     password: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
   signup: (
     username: string,
     email: string,
     password: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -58,7 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await api.getUser();
     if (data && !error) {
-      setUser(data.user);
+      setUser({
+        id: data.user.id,
+        username: data.user.username,
+        email: data.user.email,
+        is_admin: data.user.is_admin,
+        state: data.user.state,
+      });
     } else {
       localStorage.removeItem("token");
       setToken(null);
@@ -70,16 +78,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     username: string,
     password: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
     const { data, error } = await api.login(username, password);
 
     if (error || !data) {
-      return { success: false, error: error || "Login fehlgeschlagen" };
+      // Pruefe ob Verifizierung erforderlich
+      const needsVerification = error?.includes("nicht verifiziert");
+      return {
+        success: false,
+        error: error || "Login fehlgeschlagen",
+        needsVerification
+      };
     }
 
     localStorage.setItem("token", data.access_token);
     setToken(data.access_token);
-    setUser(data.user);
+    setUser({
+      id: data.user.id,
+      username: data.user.username,
+      email: data.user.email,
+      is_admin: data.user.is_admin,
+      state: data.user.state,
+    });
     return { success: true };
   };
 
@@ -87,17 +107,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     username: string,
     email: string,
     password: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; message?: string }> => {
     const { data, error } = await api.signup(username, email, password);
 
     if (error || !data) {
       return { success: false, error: error || "Registrierung fehlgeschlagen" };
     }
 
-    localStorage.setItem("token", data.access_token);
-    setToken(data.access_token);
-    setUser(data.user);
-    return { success: true };
+    // Nach Signup wird kein Token mehr zurueckgegeben
+    // User muss erst Email verifizieren
+    return {
+      success: true,
+      message: data.message
+    };
   };
 
   const logout = async () => {

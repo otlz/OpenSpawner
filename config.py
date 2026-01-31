@@ -75,6 +75,19 @@ class Config:
     # Container-Cleanup
     CONTAINER_IDLE_TIMEOUT = int(os.getenv('CONTAINER_IDLE_TIMEOUT', 3600))  # 1h in Sekunden
 
+    # ========================================
+    # SMTP / Email-Konfiguration
+    # ========================================
+    SMTP_HOST = os.getenv('SMTP_HOST', 'localhost')
+    SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+    SMTP_USER = os.getenv('SMTP_USER', '')
+    SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
+    SMTP_FROM = os.getenv('SMTP_FROM', 'noreply@localhost')
+    SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
+
+    # Frontend-URL fuer Email-Links
+    FRONTEND_URL = os.getenv('FRONTEND_URL', f"http://localhost:3000")
+
 
 class DevelopmentConfig(Config):
     """Konfiguration für Entwicklung"""

@@ -1,13 +1,15 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, redirect
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
     get_jwt_identity,
     get_jwt
 )
-from datetime import timedelta
-from models import db, User
+from datetime import timedelta, datetime
+from models import db, User, UserState
 from container_manager import ContainerManager
+from email_service import generate_verification_token, send_verification_email
+from config import Config
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -17,11 +19,11 @@ token_blacklist = set()
 
 @api_bp.route('/auth/login', methods=['POST'])
 def api_login():
-    """API-Login - gibt JWT-Token zurück"""
+    """API-Login - gibt JWT-Token zurueck"""
     data = request.get_json()
 
     if not data:
-        return jsonify({'error': 'Keine Daten übermittelt'}), 400
+        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
 
     username = data.get('username')
     password = data.get('password')
@@ -32,7 +34,18 @@ def api_login():
     user = User.query.filter_by(username=username).first()
 
     if not user or not user.check_password(password):
-        return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+        return jsonify({'error': 'Ungueltige Anmeldedaten'}), 401
+
+    # Blockade-Check
+    if user.is_blocked:
+        return jsonify({'error': 'Konto gesperrt. Kontaktiere einen Administrator.'}), 403
+
+    # Verifizierungs-Check
+    if user.state == UserState.REGISTERED.value:
+        return jsonify({
+            'error': 'Email nicht verifiziert. Bitte pruefe dein Postfach.',
+            'needs_verification': True
+        }), 403
 
     # Container spawnen wenn noch nicht vorhanden
     if not user.container_id:
@@ -41,17 +54,25 @@ def api_login():
             container_id, port = container_mgr.spawn_container(user.id, user.username)
             user.container_id = container_id
             user.container_port = port
+            # State auf ACTIVE setzen bei erstem Container-Start
+            if user.state == UserState.VERIFIED.value:
+                user.state = UserState.ACTIVE.value
+            user.last_used = datetime.utcnow()
             db.session.commit()
         except Exception as e:
             current_app.logger.error(f"Container-Start fehlgeschlagen: {str(e)}")
             return jsonify({'error': f'Container-Start fehlgeschlagen: {str(e)}'}), 500
+    else:
+        # last_used aktualisieren
+        user.last_used = datetime.utcnow()
+        db.session.commit()
 
     # JWT-Token erstellen
     expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
     access_token = create_access_token(
         identity=str(user.id),
         expires_delta=expires,
-        additional_claims={'username': user.username}
+        additional_claims={'username': user.username, 'is_admin': user.is_admin}
     )
 
     return jsonify({
@@ -61,18 +82,20 @@ def api_login():
         'user': {
             'id': user.id,
             'username': user.username,
-            'email': user.email
+            'email': user.email,
+            'is_admin': user.is_admin,
+            'state': user.state
         }
     }), 200
 
 
 @api_bp.route('/auth/signup', methods=['POST'])
 def api_signup():
-    """API-Registrierung - erstellt User, spawnt Container, gibt JWT zurück"""
+    """API-Registrierung - erstellt User und sendet Verifizierungs-Email"""
     data = request.get_json()
 
     if not data:
-        return jsonify({'error': 'Keine Daten übermittelt'}), 400
+        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
 
     username = data.get('username')
     email = data.get('email')
@@ -88,49 +111,53 @@ def api_signup():
     if len(password) < 6:
         return jsonify({'error': 'Passwort muss mindestens 6 Zeichen lang sein'}), 400
 
-    # Prüfe ob User existiert
+    # Username-Validierung (nur alphanumerisch und Bindestrich)
+    import re
+    if not re.match(r'^[a-zA-Z0-9-]+$', username):
+        return jsonify({'error': 'Username darf nur Buchstaben, Zahlen und Bindestriche enthalten'}), 400
+
+    # Pruefe ob User existiert
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username bereits vergeben'}), 409
 
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email bereits registriert'}), 409
 
+    # Pruefe ob dies der erste User ist -> wird Admin
+    is_first_user = User.query.count() == 0
+
     # Neuen User anlegen
     user = User(username=username, email=email)
     user.set_password(password)
+    user.is_admin = is_first_user
+    user.state = UserState.REGISTERED.value
+    user.verification_token = generate_verification_token()
+    user.verification_sent_at = datetime.utcnow()
+
     db.session.add(user)
     db.session.commit()
 
-    # Container spawnen
-    try:
-        container_mgr = ContainerManager()
-        container_id, port = container_mgr.spawn_container(user.id, user.username)
-        user.container_id = container_id
-        user.container_port = port
-        db.session.commit()
-    except Exception as e:
-        db.session.delete(user)
-        db.session.commit()
-        current_app.logger.error(f"Registrierung fehlgeschlagen: {str(e)}")
-        return jsonify({'error': f'Container-Erstellung fehlgeschlagen: {str(e)}'}), 500
-
-    # JWT-Token erstellen
-    expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
-    access_token = create_access_token(
-        identity=str(user.id),
-        expires_delta=expires,
-        additional_claims={'username': user.username}
+    # Verifizierungs-Email senden
+    frontend_url = Config.FRONTEND_URL
+    email_sent = send_verification_email(
+        user.email,
+        user.username,
+        user.verification_token,
+        frontend_url
     )
 
+    if not email_sent:
+        current_app.logger.warning(f"Verifizierungs-Email konnte nicht gesendet werden an {user.email}")
+
     return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': int(expires.total_seconds()),
+        'message': 'Registrierung erfolgreich. Bitte pruefe dein Postfach und bestatige deine Email-Adresse.',
         'user': {
             'id': user.id,
             'username': user.username,
-            'email': user.email
-        }
+            'email': user.email,
+            'is_admin': user.is_admin
+        },
+        'email_sent': email_sent
     }), 201
 
 
@@ -143,10 +170,75 @@ def api_logout():
     return jsonify({'message': 'Erfolgreich abgemeldet'}), 200
 
 
+@api_bp.route('/auth/verify', methods=['GET'])
+def api_verify_email():
+    """Email-Verifizierung ueber Token-Link"""
+    token = request.args.get('token')
+    frontend_url = Config.FRONTEND_URL
+
+    if not token:
+        return redirect(f"{frontend_url}/verify-error?reason=missing_token")
+
+    user = User.query.filter_by(verification_token=token).first()
+
+    if not user:
+        return redirect(f"{frontend_url}/verify-error?reason=invalid_token")
+
+    # Token invalidieren und Status aktualisieren
+    user.verification_token = None
+    user.state = UserState.VERIFIED.value
+    db.session.commit()
+
+    current_app.logger.info(f"User {user.username} hat Email verifiziert")
+    return redirect(f"{frontend_url}/verify-success")
+
+
+@api_bp.route('/auth/resend-verification', methods=['POST'])
+def api_resend_verification():
+    """Sendet Verifizierungs-Email erneut"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
+
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email erforderlich'}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        # Aus Sicherheitsgruenden kein Fehler wenn User nicht existiert
+        return jsonify({'message': 'Falls die Email registriert ist, wurde eine neue Verifizierungs-Email gesendet.'}), 200
+
+    if user.state != UserState.REGISTERED.value:
+        return jsonify({'error': 'Email bereits verifiziert'}), 400
+
+    # Neuen Token generieren
+    user.verification_token = generate_verification_token()
+    user.verification_sent_at = datetime.utcnow()
+    db.session.commit()
+
+    # Email senden
+    frontend_url = Config.FRONTEND_URL
+    email_sent = send_verification_email(
+        user.email,
+        user.username,
+        user.verification_token,
+        frontend_url
+    )
+
+    return jsonify({
+        'message': 'Falls die Email registriert ist, wurde eine neue Verifizierungs-Email gesendet.',
+        'email_sent': email_sent
+    }), 200
+
+
 @api_bp.route('/user/me', methods=['GET'])
 @jwt_required()
 def api_user_me():
-    """Gibt aktuellen User und Container-Info zurück"""
+    """Gibt aktuellen User und Container-Info zurueck"""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 
@@ -172,6 +264,9 @@ def api_user_me():
             'id': user.id,
             'username': user.username,
             'email': user.email,
+            'is_admin': user.is_admin,
+            'state': user.state,
+            'last_used': user.last_used.isoformat() if user.last_used else None,
             'created_at': user.created_at.isoformat() if user.created_at else None
         },
         'container': {
@@ -232,6 +327,13 @@ def api_container_restart():
         container_id, port = container_mgr.spawn_container(user.id, user.username)
         user.container_id = container_id
         user.container_port = port
+
+        # State auf ACTIVE setzen bei Container-Start (falls noch VERIFIED)
+        if user.state == UserState.VERIFIED.value:
+            user.state = UserState.ACTIVE.value
+
+        # last_used aktualisieren
+        user.last_used = datetime.utcnow()
         db.session.commit()
 
         return jsonify({

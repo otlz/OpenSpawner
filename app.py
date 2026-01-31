@@ -3,9 +3,10 @@ from flask_login import LoginManager, login_required, current_user
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from sqlalchemy import text
-from models import db, User
+from models import db, User, AdminTakeoverSession
 from auth import auth_bp
 from api import api_bp, check_if_token_revoked
+from admin_api import admin_bp
 from config import Config
 from container_manager import ContainerManager
 
@@ -55,6 +56,7 @@ login_manager.login_message_category = 'error'
 # Blueprints registrieren
 app.register_blueprint(auth_bp)
 app.register_blueprint(api_bp)
+app.register_blueprint(admin_bp)
 
 @login_manager.user_loader
 def load_user(user_id):

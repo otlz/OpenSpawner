@@ -24,7 +24,9 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Shield,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -130,6 +132,15 @@ export default function DashboardPage() {
             <span className="text-lg font-semibold">Container Spawner</span>
           </div>
           <div className="flex items-center gap-4">
+            {/* Admin-Link */}
+            {user.is_admin && (
+              <Link href="/admin">
+                <Button variant="outline" size="sm">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Admin
+                </Button>
+              </Link>
+            )}
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="text-xs">
@@ -137,6 +148,11 @@ export default function DashboardPage() {
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium">{user.username}</span>
+              {user.is_admin && (
+                <Badge variant="secondary" className="text-xs">
+                  Admin
+                </Badge>
+              )}
             </div>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />

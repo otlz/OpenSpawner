@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Container, Loader2 } from "lucide-react";
+import { Container, Loader2, Mail, CheckCircle2 } from "lucide-react";
 
 export default function SignupPage() {
   const [username, setUsername] = useState("");
@@ -23,6 +23,8 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const { signup, user, isLoading } = useAuth();
   const router = useRouter();
@@ -38,7 +40,7 @@ export default function SignupPage() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("Passworter stimmen nicht uberein");
+      setError("Passwoerter stimmen nicht ueberein");
       return;
     }
 
@@ -52,12 +54,19 @@ export default function SignupPage() {
       return;
     }
 
+    // Validiere Username-Format
+    if (!/^[a-zA-Z0-9-]+$/.test(username)) {
+      setError("Benutzername darf nur Buchstaben, Zahlen und Bindestriche enthalten");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const result = await signup(username, email, password);
 
     if (result.success) {
-      router.push("/dashboard");
+      setSignupSuccess(true);
+      setSuccessMessage(result.message || "Registrierung erfolgreich!");
     } else {
       setError(result.error || "Registrierung fehlgeschlagen");
       setIsSubmitting(false);
@@ -68,6 +77,48 @@ export default function SignupPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Erfolgsanzeige nach Registrierung
+  if (signupSuccess) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted/50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle2 className="h-6 w-6 text-green-600" />
+            </div>
+            <CardTitle className="text-2xl font-bold">
+              Registrierung erfolgreich!
+            </CardTitle>
+            <CardDescription>{successMessage}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-md border bg-muted/50 p-4">
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium">Pruefe dein Postfach</p>
+                  <p className="text-sm text-muted-foreground">
+                    Wir haben eine Verifizierungs-Email an{" "}
+                    <strong>{email}</strong> gesendet. Klicke auf den Link in
+                    der Email, um dein Konto zu aktivieren.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="text-center text-sm text-muted-foreground">
+              <p>Keine Email erhalten?</p>
+              <p>Pruefe deinen Spam-Ordner oder versuche dich anzumelden,</p>
+              <p>um eine neue Verifizierungs-Email anzufordern.</p>
+            </div>
+            <Button asChild className="w-full">
+              <Link href="/login">Zum Login</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -103,7 +154,8 @@ export default function SignupPage() {
                 disabled={isSubmitting}
               />
               <p className="text-xs text-muted-foreground">
-                Dieser wird Teil deiner Service-URL
+                Nur Buchstaben, Zahlen und Bindestriche. Wird Teil deiner
+                Service-URL.
               </p>
             </div>
             <div className="space-y-2">
@@ -117,13 +169,16 @@ export default function SignupPage() {
                 required
                 disabled={isSubmitting}
               />
+              <p className="text-xs text-muted-foreground">
+                Du erhaeltst eine Verifizierungs-Email an diese Adresse.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Passwort</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Mindestens 6 Zeichen"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -131,11 +186,11 @@ export default function SignupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Passwort bestatigen</Label>
+              <Label htmlFor="confirmPassword">Passwort bestaetigen</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Passwort wiederholen"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -146,7 +201,7 @@ export default function SignupPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Container wird erstellt...
+                  Registrierung laeuft...
                 </>
               ) : (
                 "Registrieren"
