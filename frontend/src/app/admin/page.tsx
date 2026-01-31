@@ -181,8 +181,8 @@ export default function AdminPage() {
     setActionLoading(null);
   };
 
-  const handleDeleteUser = async (userId: number, username: string) => {
-    if (!confirm(`User "${username}" wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden!`)) {
+  const handleDeleteUser = async (userId: number, userEmail: string) => {
+    if (!confirm(`User "${userEmail}" wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden!`)) {
       return;
     }
     setActionLoading(userId);
@@ -218,7 +218,7 @@ export default function AdminPage() {
   // Gefilterte Users
   const filteredUsers = users.filter(
     (u) =>
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -260,10 +260,10 @@ export default function AdminPage() {
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="text-xs">
-                  {user?.username.slice(0, 2).toUpperCase()}
+                  {user?.email.slice(0, 1).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium">{user?.username}</span>
+              <span className="text-sm font-medium">{user?.email}</span>
               <Badge variant="secondary" className="text-xs">
                 Admin
               </Badge>
@@ -403,12 +403,12 @@ export default function AdminPage() {
                               : ""
                           }`}
                         >
-                          {u.username.slice(0, 2).toUpperCase()}
+                          {u.email.slice(0, 1).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{u.username}</span>
+                          <span className="font-medium">{u.email}</span>
                           {u.is_admin && (
                             <Badge variant="secondary" className="text-xs">
                               Admin
@@ -538,7 +538,7 @@ export default function AdminPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteUser(u.id, u.username)}
+                              onClick={() => handleDeleteUser(u.id, u.email)}
                               title="Benutzer loeschen"
                               className="text-red-600 hover:text-red-700"
                             >
