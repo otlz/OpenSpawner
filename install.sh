@@ -375,15 +375,22 @@ fi
 # 7. Docker-Images bauen
 # ============================================================
 echo ""
-echo "Baue Docker-Images..."
+echo "Baue Docker-Images fuer Multi-Container MVP..."
+echo "  - user-service-template (Development)"
+echo "  - user-template-next (Production)"
+echo "  - spawner-api (Backend)"
+echo "  - spawner-frontend (Frontend)"
+echo ""
 
 # Stoppe laufende Container
 ${COMPOSE_CMD} down 2>/dev/null || true
 
 # Zaehle aktive Builds fuer Fortschrittsanzeige
 BUILD_STEP=1
-TOTAL_BUILDS=3  # user-service-template + spawner-api + frontend (optional: + user-template-next)
-[ "$USER_TEMPLATE_IMAGE" = "user-template-next:latest" ] && [ -d "${INSTALL_DIR}/user-template-next" ] && TOTAL_BUILDS=$((TOTAL_BUILDS + 1))
+TOTAL_BUILDS=3  # user-service-template + spawner-api + frontend
+
+# Multi-Container Support: Baue auch user-template-next wenn Verzeichnis existiert
+[ -d "${INSTALL_DIR}/user-template-next" ] && TOTAL_BUILDS=$((TOTAL_BUILDS + 1))
 
 # User-Template Image bauen (fuer User-Container)
 if [ -d "${INSTALL_DIR}/user-template" ]; then
@@ -415,10 +422,10 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
     BUILD_STEP=$((BUILD_STEP + 1))
 fi
 
-# User-Template-Next Image bauen (alternatives Template, OPTIONAL)
-# Wird NUR gebaut wenn USER_TEMPLATE_IMAGE=user-template-next:latest in .env gesetzt ist
-if [ "$USER_TEMPLATE_IMAGE" = "user-template-next:latest" ] && [ -d "${INSTALL_DIR}/user-template-next" ]; then
-    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-template-next (Next.js Template, Optional)..."
+# User-Template-Next Image bauen (Production Template fuer Multi-Container MVP)
+# Wird automatisch gebaut wenn Verzeichnis existiert
+if [ -d "${INSTALL_DIR}/user-template-next" ]; then
+    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-template-next (Next.js Template - Production)..."
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
@@ -435,14 +442,13 @@ if [ "$USER_TEMPLATE_IMAGE" = "user-template-next:latest" ] && [ -d "${INSTALL_D
         echo -e "  user-template-next: ${GREEN}OK${NC}"
     else
         echo ""
-        echo -e "  user-template-next: ${YELLOW}WARNUNG - Build fehlgeschlagen (optional)${NC}"
+        echo -e "  user-template-next: ${RED}FEHLER${NC}"
+        echo "  Siehe Build-Log: ${LOG_FILE}"
+        echo "  Letzte 50 Zeilen:"
+        tail -50 "${BUILD_LOG}"
+        exit 1
     fi
     BUILD_STEP=$((BUILD_STEP + 1))
-elif [ -d "${INSTALL_DIR}/user-template-next" ]; then
-    echo "  [⊙] Überspringe user-template-next (nicht aktiviert in .env)"
-    echo -e "        ${BLUE}Um Next.js Template zu aktivieren, setze in .env:${NC}"
-    echo "        USER_TEMPLATE_IMAGE=user-template-next:latest"
-    echo ""
 fi
 
 # Spawner Backend Image bauen
@@ -561,8 +567,17 @@ echo "  Logs FE:     ${COMPOSE_CMD} logs -f frontend"
 echo "  Neustart:    ${COMPOSE_CMD} restart"
 echo "  Stoppen:     ${COMPOSE_CMD} down"
 echo ""
+echo "WICHTIG - Multi-Container MVP:"
+echo "  - Jeder User erhält 2 Container: Development und Production"
+echo "  - Dev Container:  https://${SPAWNER_SUBDOMAIN}.${BASE_DOMAIN}/{slug}-dev"
+echo "  - Prod Container: https://${SPAWNER_SUBDOMAIN}.${BASE_DOMAIN}/{slug}-prod"
+echo ""
 echo "WICHTIG - Passwordless Auth:"
 echo "  Das System nutzt Magic Links (Email-basiert)!"
 echo "  - SMTP konfigurieren: .env Datei anpassen"
 echo "  - Datenbank wird automatisch mit allen Tabellen erstellt"
+echo ""
+echo "Template Configuration (.env):"
+echo "  USER_TEMPLATE_IMAGE_DEV=user-service-template:latest"
+echo "  USER_TEMPLATE_IMAGE_PROD=user-template-next:latest"
 echo ""
