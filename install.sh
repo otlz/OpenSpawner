@@ -448,13 +448,13 @@ if [ $BUILD_EXIT -eq 0 ] && docker image inspect spawner:latest >/dev/null 2>&1;
     echo ""
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
-        echo ""
-        echo -e "  spawner-api: ${RED}FEHLER${NC}"
-        echo "  Siehe Build-Log: ${LOG_FILE}"
-        echo "  Letzte 50 Zeilen:"
-        tail -50 "${BUILD_LOG}"
-        exit 1
-    fi
+    echo ""
+    echo -e "  spawner-api: ${RED}FEHLER${NC}"
+    echo "  Siehe Build-Log: ${LOG_FILE}"
+    echo "  Letzte 50 Zeilen:"
+    tail -50 "${BUILD_LOG}"
+    exit 1
+fi
 
 # Frontend Image bauen
 if [ -d "${INSTALL_DIR}/frontend" ]; then
