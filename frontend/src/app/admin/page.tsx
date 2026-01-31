@@ -89,7 +89,7 @@ function getStateLabel(state: string) {
   }
 }
 
-function formatDate(dateString: string | null) {
+function formatDate(dateString: string | null | undefined) {
   if (!dateString) return "-";
   return new Date(dateString).toLocaleDateString("de-DE", {
     day: "2-digit",
