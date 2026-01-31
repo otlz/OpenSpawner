@@ -58,7 +58,7 @@ def send_verification_email(user_email, username, token, base_url=None):
                 <p>Vielen Dank fuer deine Registrierung beim Container Spawner.</p>
                 <p>Bitte bestatige deine Email-Adresse, indem du auf den folgenden Button klickst:</p>
                 <p style="text-align: center;">
-                    <a href="{verify_url}" class="button">Email bestaetigen</a>
+                    <a href="{verify_url}" class="button">Email bestätigen</a>
                 </p>
                 <p>Oder kopiere diesen Link in deinen Browser:</p>
                 <p style="word-break: break-all; background: #eee; padding: 10px; border-radius: 3px;">

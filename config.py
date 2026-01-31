@@ -86,7 +86,10 @@ class Config:
     SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
 
     # Frontend-URL fuer Email-Links
-    FRONTEND_URL = os.getenv('FRONTEND_URL', f"http://localhost:3000")
+    FRONTEND_URL = os.getenv(
+        'FRONTEND_URL',
+        f"{PREFERRED_URL_SCHEME}://{SPAWNER_SUBDOMAIN}.{BASE_DOMAIN}"
+    )
 
 
 class DevelopmentConfig(Config):

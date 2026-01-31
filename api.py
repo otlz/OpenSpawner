@@ -190,7 +190,7 @@ def api_verify_email():
     db.session.commit()
 
     current_app.logger.info(f"User {user.username} hat Email verifiziert")
-    return redirect(f"{frontend_url}/verify-success")
+    return redirect(f"{frontend_url}/verify-success?verified=true")
 
 
 @api_bp.route('/auth/resend-verification', methods=['POST'])
