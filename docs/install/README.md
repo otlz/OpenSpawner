@@ -169,6 +169,20 @@ docker-compose up -d
 | `JWT_ACCESS_TOKEN_EXPIRES` | `3600` | JWT Token Gueltigkeitsdauer (Sekunden) |
 | `CONTAINER_IDLE_TIMEOUT` | `3600` | Timeout in Sekunden (noch nicht implementiert) |
 
+### Email/SMTP-Variablen (fuer Verifizierung)
+
+| Variable | Standard | Beschreibung |
+|----------|----------|--------------|
+| `SMTP_HOST` | `localhost` | SMTP-Server Hostname |
+| `SMTP_PORT` | `587` | SMTP-Server Port |
+| `SMTP_USER` | `` | SMTP-Benutzername |
+| `SMTP_PASSWORD` | `` | SMTP-Passwort |
+| `SMTP_FROM` | `noreply@localhost` | Absender-Email-Adresse |
+| `SMTP_USE_TLS` | `true` | TLS verwenden (true/false) |
+| `FRONTEND_URL` | `http://localhost:3000` | Frontend-URL fuer Email-Links |
+
+**Hinweis**: Die Email-Konfiguration wird fuer die Email-Verifizierung bei der Registrierung und fuer Passwort-Reset-Emails benoetigt.
+
 ### User-Templates
 
 Es stehen zwei Templates fuer User-Container zur Verfuegung:

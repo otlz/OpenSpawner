@@ -19,6 +19,66 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.3.0] - 2026-01-31
+
+### Hinzugefuegt
+- **Admin-Dashboard**: Vollstaendige Benutzerverwaltung fuer Admins
+  - Benutzer sperren/entsperren
+  - Passwoerter zuruecksetzen (sendet Email)
+  - Benutzer-Container loeschen
+  - Benutzer loeschen
+  - Verifizierungs-Emails erneut senden
+- **Email-Verifizierung**: Neue Benutzer muessen Email bestaetigen
+  - Verifizierungs-Email bei Registrierung
+  - OneTimeToken-basierte Verifizierung
+  - verify-success und verify-error Seiten
+- **Erster User wird Admin**: Der erste registrierte Benutzer erhaelt Admin-Rechte
+- **Benutzer-States**: registered → verified → active
+- **Aktivitaetstracking**: `last_used` Feld fuer letzten Container-Zugriff
+- **Farbcodierte Benutzerliste** im Admin-Dashboard:
+  - Gruen: Aktiv, kuerzlich genutzt
+  - Gelb: Warnung (unverifiziert/inaktiv)
+  - Rot: Kritisch (lange unverifiziert/sehr lange inaktiv)
+- **SMTP-Konfiguration**: Email-Versand fuer Verifizierung und Passwort-Reset
+- **Admin-API Endpoints**:
+  - `GET /api/admin/users` - Alle Benutzer auflisten
+  - `POST /api/admin/users/{id}/block` - Benutzer sperren
+  - `POST /api/admin/users/{id}/unblock` - Benutzer entsperren
+  - `POST /api/admin/users/{id}/reset-password` - Passwort zuruecksetzen
+  - `POST /api/admin/users/{id}/resend-verification` - Verifizierungs-Email senden
+  - `DELETE /api/admin/users/{id}/container` - Container loeschen
+  - `DELETE /api/admin/users/{id}` - Benutzer loeschen
+  - `POST /api/admin/users/{id}/takeover` - Container-Zugriff (Dummy, Phase 2)
+- **Neue Backend-Dateien**:
+  - `admin_api.py` - Admin-Blueprint mit Endpoints
+  - `decorators.py` - @admin_required und @verified_required Decorator
+  - `email_service.py` - Email-Versand-Service
+- **Neue Frontend-Seiten**:
+  - `/admin` - Admin-Dashboard
+  - `/verify-success` - Email-Verifizierung erfolgreich
+  - `/verify-error` - Email-Verifizierung fehlgeschlagen
+
+### Geaendert
+- `models.py`: Neue Felder (is_admin, is_blocked, state, last_used, verification_token), UserState Enum, AdminTakeoverSession Model
+- `config.py`: SMTP-Konfiguration, FRONTEND_URL
+- `api.py`: Signup sendet Verifizierungs-Email (kein Auto-Login mehr), Login prueft Blockade und Verifizierung
+- `app.py`: Admin-Blueprint registriert
+- `.env.example`: SMTP-Variablen hinzugefuegt
+- Frontend `api.ts`: Admin-API-Funktionen
+- Frontend `use-auth.tsx`: User-Interface mit is_admin und state
+- Frontend `signup/page.tsx`: Zeigt Verifizierungs-Hinweise nach Registrierung
+- Frontend `login/page.tsx`: Option zum erneuten Senden der Verifizierungs-Email
+- Frontend `dashboard/page.tsx`: Admin-Link fuer Admins
+
+### Sicherheit
+- Blockierte Benutzer koennen sich nicht mehr anmelden
+- Unverifizierte Benutzer koennen sich nicht anmelden
+- Admins koennen sich nicht selbst sperren oder loeschen
+- Admins koennen andere Admins nicht loeschen
+- Verification-Token ist einmalig verwendbar (OneTimeToken)
+
+---
+
 ## [0.2.0] - 2026-01-31
 
 ### Hinzugefuegt

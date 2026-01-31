@@ -40,5 +40,5 @@ Willkommen zur Dokumentation des Container Spawner Projekts.
 
 ---
 
-**Aktuelle Version**: 0.1.0
+**Aktuelle Version**: 0.3.0
 **Letzte Aktualisierung**: Januar 2026
