@@ -259,16 +259,35 @@ def api_verify_login():
     # Markiere Token als verwendet
     magic_token.mark_as_used()
 
-    # Container starten falls gestoppt
+    # Container Management - starten oder neu erstellen
+    container_mgr = ContainerManager()
+
     if user.container_id:
         try:
-            container_mgr = ContainerManager()
             status = container_mgr.get_container_status(user.container_id)
             if status != 'running':
                 # Container neu starten
                 container_mgr.start_container(user.container_id)
+                current_app.logger.info(f"[LOGIN] Container {user.container_id[:12]} neu gestartet für User {user.email}")
         except Exception as e:
-            current_app.logger.warning(f"Container-Start fehlgeschlagen: {str(e)}")
+            # Container existiert nicht mehr - neuen erstellen
+            current_app.logger.warning(f"Container {user.container_id[:12]} nicht gefunden, erstelle neuen: {str(e)}")
+            try:
+                container_id, port = container_mgr.spawn_container(user.id, user.slug)
+                user.container_id = container_id
+                user.container_port = port
+                current_app.logger.info(f"[LOGIN] Neuer Container erstellt für User {user.email} (slug: {user.slug})")
+            except Exception as spawn_error:
+                current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(spawn_error)}")
+    else:
+        # Kein Container vorhanden - neu erstellen
+        try:
+            container_id, port = container_mgr.spawn_container(user.id, user.slug)
+            user.container_id = container_id
+            user.container_port = port
+            current_app.logger.info(f"[LOGIN] Container erstellt für User {user.email} (slug: {user.slug})")
+        except Exception as e:
+            current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
 
     user.last_used = datetime.utcnow()
     db.session.commit()
