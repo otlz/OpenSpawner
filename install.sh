@@ -380,9 +380,14 @@ echo "Baue Docker-Images..."
 # Stoppe laufende Container
 ${COMPOSE_CMD} down 2>/dev/null || true
 
+# Zaehle aktive Builds fuer Fortschrittsanzeige
+BUILD_STEP=1
+TOTAL_BUILDS=3  # user-service-template + spawner-api + frontend (optional: + user-template-next)
+[ "$USER_TEMPLATE_IMAGE" = "user-template-next:latest" ] && [ -d "${INSTALL_DIR}/user-template-next" ] && TOTAL_BUILDS=$((TOTAL_BUILDS + 1))
+
 # User-Template Image bauen (fuer User-Container)
 if [ -d "${INSTALL_DIR}/user-template" ]; then
-    echo "  [1/4] Baue user-service-template (User-Container)..."
+    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-service-template (User-Container)..."
     echo ""
 
     # Build ausfuehren und Output in Datei speichern
@@ -407,11 +412,13 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
         tail -50 "${BUILD_LOG}"
         exit 1
     fi
+    BUILD_STEP=$((BUILD_STEP + 1))
 fi
 
-# User-Template-Next Image bauen (alternatives Template, optional)
-if [ -d "${INSTALL_DIR}/user-template-next" ]; then
-    echo "  [2/4] Baue user-template-next (Next.js Template)..."
+# User-Template-Next Image bauen (alternatives Template, OPTIONAL)
+# Wird NUR gebaut wenn USER_TEMPLATE_IMAGE=user-template-next:latest in .env gesetzt ist
+if [ "$USER_TEMPLATE_IMAGE" = "user-template-next:latest" ] && [ -d "${INSTALL_DIR}/user-template-next" ]; then
+    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-template-next (Next.js Template, Optional)..."
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
@@ -430,10 +437,16 @@ if [ -d "${INSTALL_DIR}/user-template-next" ]; then
         echo ""
         echo -e "  user-template-next: ${YELLOW}WARNUNG - Build fehlgeschlagen (optional)${NC}"
     fi
+    BUILD_STEP=$((BUILD_STEP + 1))
+elif [ -d "${INSTALL_DIR}/user-template-next" ]; then
+    echo "  [⊙] Überspringe user-template-next (nicht aktiviert in .env)"
+    echo -e "        ${BLUE}Um Next.js Template zu aktivieren, setze in .env:${NC}"
+    echo "        USER_TEMPLATE_IMAGE=user-template-next:latest"
+    echo ""
 fi
 
 # Spawner Backend Image bauen
-echo "  [3/4] Baue Spawner API (Flask Backend)..."
+echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Spawner API (Flask Backend)..."
 echo ""
 
 BUILD_LOG="${LOG_FILE}"
@@ -455,10 +468,11 @@ else
     tail -50 "${BUILD_LOG}"
     exit 1
 fi
+BUILD_STEP=$((BUILD_STEP + 1))
 
 # Frontend Image bauen
 if [ -d "${INSTALL_DIR}/frontend" ]; then
-    echo "  [4/4] Baue Frontend (Next.js)..."
+    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Frontend (Next.js)..."
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
@@ -481,10 +495,11 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
         tail -50 "${BUILD_LOG}"
         exit 1
     fi
+    BUILD_STEP=$((BUILD_STEP + 1))
 fi
 
 echo ""
-echo "Alle Images erfolgreich gebaut."
+echo "Alle erforderlichen Images erfolgreich gebaut."
 
 # ============================================================
 # 8. Container starten
