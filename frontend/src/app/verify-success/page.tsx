@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle2, Container, Loader2 } from "lucide-react";
 
-export default function VerifySuccessPage() {
+function VerifySuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -76,5 +77,17 @@ export default function VerifySuccessPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function VerifySuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    }>
+      <VerifySuccessContent />
+    </Suspense>
   );
 }

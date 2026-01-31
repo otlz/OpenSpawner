@@ -168,6 +168,11 @@ junit.xml
 # Kann bei Bedarf auskommentiert werden um es zu behalten
 CLAUDE.md
 
+# AGENTS.md - Guide fuer agentic coding assistants
+# Wird von AI-Assistenten zum Verstaendnis der Codebase verwendet
+# Sollte nicht gepusht werden
+AGENTS.md
+
 # ============================================================
 # Misc
 # ============================================================

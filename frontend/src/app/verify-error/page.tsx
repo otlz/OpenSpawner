@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { XCircle, RefreshCw, Mail } from "lucide-react";
+import { XCircle, RefreshCw, Mail, Loader2 } from "lucide-react";
 
-export default function VerifyErrorPage() {
+function VerifyErrorContent() {
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
 
@@ -65,5 +66,17 @@ export default function VerifyErrorPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function VerifyErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    }>
+      <VerifyErrorContent />
+    </Suspense>
   );
 }
