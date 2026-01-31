@@ -5,9 +5,13 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+interface FetchApiOptions extends RequestInit {
+  queryParams?: Record<string, string>;
+}
+
 async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: FetchApiOptions = {}
 ): Promise<ApiResponse<T>> {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -21,8 +25,16 @@ async function fetchApi<T>(
     (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   }
 
+  let url = `${API_BASE}${endpoint}`;
+
+  // Query-Parameter anhängen
+  if (options.queryParams) {
+    const params = new URLSearchParams(options.queryParams);
+    url += `?${params.toString()}`;
+  }
+
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetch(url, {
       ...options,
       headers,
     });
@@ -43,40 +55,34 @@ async function fetchApi<T>(
 // Auth Interfaces
 // ============================================================
 
+export interface User {
+  id: number;
+  email: string;
+  slug: string;
+  is_admin: boolean;
+  state: "registered" | "verified" | "active";
+  last_used?: string | null;
+  created_at?: string | null;
+  container_id?: string | null;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    is_admin: boolean;
-    state: "registered" | "verified" | "active";
-  };
+  user: User;
 }
 
 export interface SignupResponse {
   message: string;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    is_admin: boolean;
-  };
-  email_sent: boolean;
+}
+
+export interface MagicLinkMessage {
+  message: string;
 }
 
 export interface UserResponse {
-  user: {
-    id: number;
-    username: string;
-    email: string;
-    is_admin: boolean;
-    state: "registered" | "verified" | "active";
-    last_used: string | null;
-    created_at: string | null;
-  };
+  user: User;
   container: {
     id: string | null;
     port: number | null;
@@ -100,17 +106,9 @@ export interface ContainerRestartResponse {
 // Admin Interfaces
 // ============================================================
 
-export interface AdminUser {
-  id: number;
-  username: string;
-  email: string;
-  is_admin: boolean;
+export interface AdminUser extends User {
   is_blocked: boolean;
   blocked_at: string | null;
-  state: "registered" | "verified" | "active";
-  last_used: string | null;
-  created_at: string | null;
-  container_id: string | null;
 }
 
 export interface AdminUsersResponse {
@@ -140,9 +138,9 @@ export interface TakeoverResponse {
 export interface TakeoverSession {
   id: number;
   admin_id: number;
-  admin_username: string | null;
+  admin_email: string | null;
   target_user_id: number;
-  target_username: string | null;
+  target_email: string | null;
   started_at: string | null;
   reason: string | null;
 }
@@ -157,32 +155,41 @@ export interface ActiveTakeoversResponse {
 // ============================================================
 
 export const api = {
-  // Auth
-  login: (username: string, password: string) =>
-    fetchApi<LoginResponse>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
-
-  signup: (username: string, email: string, password: string) =>
-    fetchApi<SignupResponse>("/api/auth/signup", {
-      method: "POST",
-      body: JSON.stringify({ username, email, password }),
-    }),
-
-  logout: () =>
-    fetchApi<{ message: string }>("/api/auth/logout", {
-      method: "POST",
-    }),
-
-  resendVerification: (email: string) =>
-    fetchApi<{ message: string; email_sent: boolean }>(
-      "/api/auth/resend-verification",
-      {
+  auth: {
+    // Magic Link Login
+    login: (email: string) =>
+      fetchApi<MagicLinkMessage>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ email }),
-      }
-    ),
+      }),
+
+    // Magic Link Signup
+    signup: (email: string) =>
+      fetchApi<MagicLinkMessage>("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+
+    // Verify Signup Token
+    verifySignup: (token: string) =>
+      fetchApi<LoginResponse>("/api/auth/verify-signup", {
+        method: "GET",
+        queryParams: { token },
+      }),
+
+    // Verify Login Token
+    verifyLogin: (token: string) =>
+      fetchApi<LoginResponse>("/api/auth/verify-login", {
+        method: "GET",
+        queryParams: { token },
+      }),
+
+    // Logout
+    logout: () =>
+      fetchApi<{ message: string }>("/api/auth/logout", {
+        method: "POST",
+      }),
+  },
 
   // User
   getUser: () => fetchApi<UserResponse>("/api/user/me"),
@@ -219,14 +226,7 @@ export const adminApi = {
       method: "POST",
     }),
 
-  // Password Reset
-  resetPassword: (id: number, password?: string) =>
-    fetchApi<AdminActionResponse>(`/api/admin/users/${id}/reset-password`, {
-      method: "POST",
-      body: JSON.stringify(password ? { password } : {}),
-    }),
-
-  // Verification
+  // Resend Magic Link (for admins to resend login links)
   resendVerification: (id: number) =>
     fetchApi<AdminActionResponse>(`/api/admin/users/${id}/resend-verification`, {
       method: "POST",

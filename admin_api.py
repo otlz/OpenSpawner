@@ -2,18 +2,12 @@
 Admin-API Blueprint
 Alle Endpoints erfordern Admin-Rechte.
 """
-import secrets
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
+from datetime import datetime, timedelta
 from models import db, User, UserState, AdminTakeoverSession
 from decorators import admin_required
 from container_manager import ContainerManager
-from email_service import (
-    generate_verification_token,
-    send_verification_email,
-    send_password_reset_email
-)
 from config import Config
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -87,10 +81,10 @@ def block_user(user_id):
     user.blocked_by = int(admin_id)
     db.session.commit()
 
-    current_app.logger.info(f"User {user.username} wurde von Admin {admin_id} gesperrt")
+    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} gesperrt")
 
     return jsonify({
-        'message': f'User {user.username} wurde gesperrt',
+        'message': f'User {user.email} wurde gesperrt',
         'user': user.to_dict()
     }), 200
 
@@ -114,47 +108,11 @@ def unblock_user(user_id):
     db.session.commit()
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"User {user.username} wurde von Admin {admin_id} entsperrt")
+    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} entsperrt")
 
     return jsonify({
-        'message': f'User {user.username} wurde entsperrt',
+        'message': f'User {user.email} wurde entsperrt',
         'user': user.to_dict()
-    }), 200
-
-
-@admin_bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
-@jwt_required()
-@admin_required()
-def reset_user_password(user_id):
-    """Setzt das Passwort eines Benutzers zurueck"""
-    user = User.query.get(user_id)
-
-    if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
-
-    data = request.get_json() or {}
-
-    # Neues Passwort: entweder angegeben oder zufaellig generiert
-    new_password = data.get('password')
-    if not new_password:
-        new_password = secrets.token_urlsafe(12)
-
-    if len(new_password) < 6:
-        return jsonify({'error': 'Passwort muss mindestens 6 Zeichen lang sein'}), 400
-
-    user.set_password(new_password)
-    db.session.commit()
-
-    # Email mit neuem Passwort senden
-    email_sent = send_password_reset_email(user.email, user.username, new_password)
-
-    admin_id = get_jwt_identity()
-    current_app.logger.info(f"Passwort von User {user.username} wurde von Admin {admin_id} zurueckgesetzt")
-
-    return jsonify({
-        'message': f'Passwort von {user.username} wurde zurueckgesetzt',
-        'email_sent': email_sent,
-        'password_generated': 'password' not in (data or {})
     }), 200
 
 
@@ -162,34 +120,37 @@ def reset_user_password(user_id):
 @jwt_required()
 @admin_required()
 def resend_user_verification(user_id):
-    """Sendet Verifizierungs-Email erneut an einen Benutzer"""
+    """Sendet Magic Link erneut an einen Benutzer (für Admin-Funktion)"""
+    from email_service import generate_magic_link_token, send_magic_link_email
+    from models import MagicLinkToken
+
     user = User.query.get(user_id)
 
     if not user:
         return jsonify({'error': 'User nicht gefunden'}), 404
 
-    if user.state != UserState.REGISTERED.value:
-        return jsonify({'error': 'User ist bereits verifiziert'}), 400
+    # Generiere neuen Magic Link Token
+    token = generate_magic_link_token()
+    expires_at = datetime.utcnow() + timedelta(seconds=Config.MAGIC_LINK_TOKEN_EXPIRY)
 
-    # Neuen Token generieren
-    user.verification_token = generate_verification_token()
-    user.verification_sent_at = datetime.utcnow()
+    magic_token = MagicLinkToken(
+        user_id=user.id,
+        token=token,
+        token_type='login',
+        expires_at=expires_at,
+        ip_address=request.remote_addr
+    )
+    db.session.add(magic_token)
     db.session.commit()
 
     # Email senden
-    frontend_url = Config.FRONTEND_URL
-    email_sent = send_verification_email(
-        user.email,
-        user.username,
-        user.verification_token,
-        frontend_url
-    )
+    email_sent = send_magic_link_email(user.email, token, 'login')
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"Verifizierungs-Email fuer User {user.username} wurde von Admin {admin_id} erneut gesendet")
+    current_app.logger.info(f"Magic Link für User {user.email} wurde von Admin {admin_id} erneut gesendet")
 
     return jsonify({
-        'message': f'Verifizierungs-Email an {user.email} gesendet',
+        'message': f'Login-Link an {user.email} gesendet',
         'email_sent': email_sent
     }), 200
 
@@ -221,10 +182,10 @@ def delete_user_container(user_id):
     db.session.commit()
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"Container {old_container_id[:12]} von User {user.username} wurde von Admin {admin_id} geloescht")
+    current_app.logger.info(f"Container {old_container_id[:12]} von User {user.email} wurde von Admin {admin_id} geloescht")
 
     return jsonify({
-        'message': f'Container von {user.username} wurde geloescht',
+        'message': f'Container von {user.email} wurde geloescht',
         'user': user.to_dict()
     }), 200
 
@@ -256,14 +217,14 @@ def delete_user(user_id):
         except Exception as e:
             current_app.logger.warning(f"Fehler beim Loeschen des Containers: {str(e)}")
 
-    username = user.username
+    email = user.email
     db.session.delete(user)
     db.session.commit()
 
-    current_app.logger.info(f"User {username} wurde von Admin {admin_id} geloescht")
+    current_app.logger.info(f"User {email} wurde von Admin {admin_id} geloescht")
 
     return jsonify({
-        'message': f'User {username} wurde geloescht'
+        'message': f'User {email} wurde geloescht'
     }), 200
 
 
@@ -276,7 +237,7 @@ def delete_user(user_id):
 @admin_required()
 def start_takeover(user_id):
     """
-    Startet eine Takeover-Session fuer einen User-Container.
+    Startet eine Takeover-Session für einen User-Container.
     DUMMY-IMPLEMENTIERUNG - wird in Phase 2 vollstaendig implementiert.
     """
     admin_id = get_jwt_identity()
@@ -300,13 +261,13 @@ def start_takeover(user_id):
     db.session.add(session)
     db.session.commit()
 
-    current_app.logger.info(f"Admin {admin_id} hat Takeover fuer User {user.username} gestartet (Session {session.id})")
+    current_app.logger.info(f"Admin {admin_id} hat Takeover für User {user.email} gestartet (Session {session.id})")
 
     return jsonify({
         'message': 'Takeover-Funktion ist noch nicht vollstaendig implementiert (Phase 2)',
         'session_id': session.id,
         'status': 'dummy',
-        'note': 'Diese Funktion wird in einer spaeteren Version verfuegbar sein'
+        'note': 'Diese Funktion wird in einer späteren Version verfügbar sein'
     }), 200
 
 
@@ -350,9 +311,9 @@ def get_active_takeovers():
         sessions_list.append({
             'id': session.id,
             'admin_id': session.admin_id,
-            'admin_username': session.admin.username if session.admin else None,
+            'admin_email': session.admin.email if session.admin else None,
             'target_user_id': session.target_user_id,
-            'target_username': session.target_user.username if session.target_user else None,
+            'target_email': session.target_user.email if session.target_user else None,
             'started_at': session.started_at.isoformat() if session.started_at else None,
             'reason': session.reason
         })

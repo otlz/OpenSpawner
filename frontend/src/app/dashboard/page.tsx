@@ -144,10 +144,10 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="text-xs">
-                  {user.username.slice(0, 2).toUpperCase()}
+                  {user.email.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium">{user.username}</span>
+              <span className="text-sm font-medium">{user.email}</span>
               {user.is_admin && (
                 <Badge variant="secondary" className="text-xs">
                   Admin
@@ -303,12 +303,14 @@ export default function DashboardPage() {
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <p className="text-sm text-muted-foreground">Benutzername</p>
-                  <p className="font-medium">{user.username}</p>
-                </div>
-                <div>
                   <p className="text-sm text-muted-foreground">E-Mail</p>
                   <p className="font-medium">{user.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Container Slug</p>
+                  <code className="font-medium text-sm bg-muted px-2 py-1 rounded">
+                    {user.slug}
+                  </code>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Registriert</p>

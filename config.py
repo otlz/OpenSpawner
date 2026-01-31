@@ -91,6 +91,12 @@ class Config:
         f"{PREFERRED_URL_SCHEME}://{SPAWNER_SUBDOMAIN}.{BASE_DOMAIN}"
     )
 
+    # ========================================
+    # Magic Link Passwordless Auth
+    # ========================================
+    MAGIC_LINK_TOKEN_EXPIRY = int(os.getenv('MAGIC_LINK_TOKEN_EXPIRY', 900))  # 15 Minuten
+    MAGIC_LINK_RATE_LIMIT = int(os.getenv('MAGIC_LINK_RATE_LIMIT', 3))  # Max 3 pro Stunde
+
 
 class DevelopmentConfig(Config):
     """Konfiguration für Entwicklung"""

@@ -6,10 +6,16 @@ from flask_jwt_extended import (
     get_jwt
 )
 from datetime import timedelta, datetime
-from models import db, User, UserState
+from models import db, User, UserState, MagicLinkToken
 from container_manager import ContainerManager
-from email_service import generate_verification_token, send_verification_email
+from email_service import (
+    generate_slug_from_email,
+    generate_magic_link_token,
+    send_magic_link_email,
+    check_rate_limit
+)
 from config import Config
+import re
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -19,61 +25,189 @@ token_blacklist = set()
 
 @api_bp.route('/auth/login', methods=['POST'])
 def api_login():
-    """API-Login - gibt JWT-Token zurueck"""
+    """API-Login mit Magic Link (Passwordless)"""
     data = request.get_json()
 
     if not data:
         return jsonify({'error': 'Keine Daten uebermittelt'}), 400
 
-    username = data.get('username')
-    password = data.get('password')
+    email = data.get('email', '').strip().lower()
 
-    if not username or not password:
-        return jsonify({'error': 'Username und Passwort erforderlich'}), 400
+    if not email:
+        return jsonify({'error': 'Email ist erforderlich'}), 400
 
-    user = User.query.filter_by(username=username).first()
-
-    if not user or not user.check_password(password):
-        return jsonify({'error': 'Ungueltige Anmeldedaten'}), 401
-
-    # Blockade-Check
-    if user.is_blocked:
-        return jsonify({'error': 'Konto gesperrt. Kontaktiere einen Administrator.'}), 403
-
-    # Verifizierungs-Check
-    if user.state == UserState.REGISTERED.value:
+    # Prüfe ob User existiert
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        # Security: Gleiche Nachricht wie bei Erfolg (verhindert User-Enumeration)
         return jsonify({
-            'error': 'Email nicht verifiziert. Bitte pruefe dein Postfach.',
-            'needs_verification': True
-        }), 403
+            'message': 'Falls diese Email registriert ist, wurde ein Login-Link gesendet.'
+        }), 200
 
-    # Container spawnen wenn noch nicht vorhanden
+    # Prüfe ob User blockiert
+    if user.is_blocked:
+        return jsonify({'error': 'Dein Account wurde gesperrt'}), 403
+
+    # Rate-Limiting
+    if not check_rate_limit(email):
+        return jsonify({'error': 'Zu viele Anfragen. Bitte versuche es später erneut.'}), 429
+
+    # Generiere Magic Link Token
+    token = generate_magic_link_token()
+    expires_at = datetime.utcnow() + timedelta(seconds=Config.MAGIC_LINK_TOKEN_EXPIRY)
+
+    magic_token = MagicLinkToken(
+        user_id=user.id,
+        token=token,
+        token_type='login',
+        expires_at=expires_at,
+        ip_address=request.remote_addr
+    )
+    db.session.add(magic_token)
+    db.session.commit()
+
+    # Sende Email
+    try:
+        send_magic_link_email(email, token, 'login')
+    except Exception as e:
+        current_app.logger.error(f"Email-Versand fehlgeschlagen: {str(e)}")
+        return jsonify({'error': 'Email konnte nicht gesendet werden'}), 500
+
+    current_app.logger.info(f"[LOGIN] Magic Link gesendet an {email}")
+
+    return jsonify({
+        'message': 'Login-Link wurde an deine Email gesendet. Bitte ueberprueafe dein Postfach.'
+    }), 200
+
+
+@api_bp.route('/auth/signup', methods=['POST'])
+def api_signup():
+    """API-Registrierung mit Magic Link (Passwordless)"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
+
+    email = data.get('email', '').strip().lower()
+
+    # Validierung
+    if not email:
+        return jsonify({'error': 'Email ist erforderlich'}), 400
+
+    # Email-Format prüfen (einfache Regex)
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        return jsonify({'error': 'Ungueltige Email-Adresse'}), 400
+
+    # Prüfe ob Email bereits registriert
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({'error': 'Diese Email-Adresse ist bereits registriert'}), 409
+
+    # Rate-Limiting
+    if not check_rate_limit(email):
+        return jsonify({'error': 'Zu viele Anfragen. Bitte versuche es später erneut.'}), 429
+
+    # Erstelle User (initial mit status=REGISTERED)
+    slug = generate_slug_from_email(email)
+
+    # Prüfe ob Slug bereits existiert (unwahrscheinlich, aber möglich)
+    slug_exists = User.query.filter_by(slug=slug).first()
+    if slug_exists:
+        # Füge Random-Suffix hinzu
+        slug = slug + generate_magic_link_token()[:4]
+
+    # Prüfe ob dies der erste User ist -> wird Admin
+    is_first_user = User.query.count() == 0
+
+    user = User(email=email, slug=slug)
+    user.state = UserState.REGISTERED.value
+    user.is_admin = is_first_user
+    db.session.add(user)
+    db.session.flush()  # Damit user.id verfügbar ist
+
+    # Generiere Magic Link Token
+    token = generate_magic_link_token()
+    expires_at = datetime.utcnow() + timedelta(seconds=Config.MAGIC_LINK_TOKEN_EXPIRY)
+
+    magic_token = MagicLinkToken(
+        user_id=user.id,
+        token=token,
+        token_type='signup',
+        expires_at=expires_at,
+        ip_address=request.remote_addr
+    )
+    db.session.add(magic_token)
+    db.session.commit()
+
+    # Sende Email
+    try:
+        send_magic_link_email(email, token, 'signup')
+    except Exception as e:
+        current_app.logger.error(f"Email-Versand fehlgeschlagen: {str(e)}")
+        # Cleanup: Lösche User und Token
+        db.session.delete(magic_token)
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'error': 'Email konnte nicht gesendet werden'}), 500
+
+    current_app.logger.info(f"[SIGNUP] Magic Link gesendet an {email}")
+
+    return jsonify({
+        'message': 'Registrierungs-Link wurde an deine Email gesendet. Bitte überprüfe dein Postfach.'
+    }), 200
+
+
+@api_bp.route('/auth/verify-signup', methods=['GET'])
+def api_verify_signup():
+    """Verifiziert Signup Magic Link und erstellt JWT"""
+    token = request.args.get('token')
+
+    if not token:
+        return jsonify({'error': 'Token fehlt'}), 400
+
+    # Suche Token in Datenbank
+    magic_token = MagicLinkToken.query.filter_by(
+        token=token,
+        token_type='signup'
+    ).first()
+
+    if not magic_token:
+        return jsonify({'error': 'Ungültiger oder abgelaufener Link'}), 400
+
+    # Prüfe Gültigkeit
+    if not magic_token.is_valid():
+        return jsonify({'error': 'Dieser Link ist abgelaufen oder wurde bereits verwendet'}), 400
+
+    # Hole User
+    user = magic_token.user
+
+    # Setze User-Status auf VERIFIED
+    user.state = UserState.VERIFIED.value
+    magic_token.mark_as_used()
+    db.session.commit()
+
+    # Container spawnen (nur beim ersten Signup)
     if not user.container_id:
         try:
             container_mgr = ContainerManager()
-            container_id, port = container_mgr.spawn_container(user.id, user.username)
+            container_id, port = container_mgr.spawn_container(user.id, user.slug)
             user.container_id = container_id
             user.container_port = port
-            # State auf ACTIVE setzen bei erstem Container-Start
-            if user.state == UserState.VERIFIED.value:
-                user.state = UserState.ACTIVE.value
-            user.last_used = datetime.utcnow()
             db.session.commit()
+            current_app.logger.info(f"[SPAWNER] Container erstellt für User {user.id} (slug: {user.slug})")
         except Exception as e:
-            current_app.logger.error(f"Container-Start fehlgeschlagen: {str(e)}")
-            return jsonify({'error': f'Container-Start fehlgeschlagen: {str(e)}'}), 500
-    else:
-        # last_used aktualisieren
-        user.last_used = datetime.utcnow()
-        db.session.commit()
+            current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
+            # User ist trotzdem erstellt, Container kann später manuell erstellt werden
 
-    # JWT-Token erstellen
+    # JWT erstellen
     expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
     access_token = create_access_token(
         identity=str(user.id),
         expires_delta=expires,
-        additional_claims={'username': user.username, 'is_admin': user.is_admin}
+        additional_claims={'is_admin': user.is_admin}
     )
+
+    current_app.logger.info(f"[SIGNUP] User {user.email} erfolgreich registriert")
 
     return jsonify({
         'access_token': access_token,
@@ -81,84 +215,87 @@ def api_login():
         'expires_in': int(expires.total_seconds()),
         'user': {
             'id': user.id,
-            'username': user.username,
             'email': user.email,
+            'slug': user.slug,
             'is_admin': user.is_admin,
-            'state': user.state
+            'state': user.state,
+            'container_id': user.container_id
         }
     }), 200
 
 
-@api_bp.route('/auth/signup', methods=['POST'])
-def api_signup():
-    """API-Registrierung - erstellt User und sendet Verifizierungs-Email"""
-    data = request.get_json()
+@api_bp.route('/auth/verify-login', methods=['GET'])
+def api_verify_login():
+    """Verifiziert Login Magic Link und erstellt JWT"""
+    token = request.args.get('token')
 
-    if not data:
-        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
+    if not token:
+        return jsonify({'error': 'Token fehlt'}), 400
 
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
+    # Suche Token
+    magic_token = MagicLinkToken.query.filter_by(
+        token=token,
+        token_type='login'
+    ).first()
 
-    if not username or not email or not password:
-        return jsonify({'error': 'Username, Email und Passwort erforderlich'}), 400
+    if not magic_token:
+        return jsonify({'error': 'Ungültiger oder abgelaufener Link'}), 400
 
-    # Validierung
-    if len(username) < 3:
-        return jsonify({'error': 'Username muss mindestens 3 Zeichen lang sein'}), 400
+    # Prüfe Gültigkeit
+    if not magic_token.is_valid():
+        return jsonify({'error': 'Dieser Link ist abgelaufen oder wurde bereits verwendet'}), 400
 
-    if len(password) < 6:
-        return jsonify({'error': 'Passwort muss mindestens 6 Zeichen lang sein'}), 400
+    # Hole User
+    user = magic_token.user
 
-    # Username-Validierung (nur alphanumerisch und Bindestrich)
-    import re
-    if not re.match(r'^[a-zA-Z0-9-]+$', username):
-        return jsonify({'error': 'Username darf nur Buchstaben, Zahlen und Bindestriche enthalten'}), 400
+    # Prüfe ob User blockiert
+    if user.is_blocked:
+        return jsonify({'error': 'Dein Account wurde gesperrt'}), 403
 
-    # Pruefe ob User existiert
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Username bereits vergeben'}), 409
+    # Prüfe ob Email verifiziert
+    if user.state == UserState.REGISTERED.value:
+        return jsonify({'error': 'Bitte verifiziere zuerst deine Email-Adresse'}), 403
 
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': 'Email bereits registriert'}), 409
+    # Markiere Token als verwendet
+    magic_token.mark_as_used()
 
-    # Pruefe ob dies der erste User ist -> wird Admin
-    is_first_user = User.query.count() == 0
+    # Container starten falls gestoppt
+    if user.container_id:
+        try:
+            container_mgr = ContainerManager()
+            status = container_mgr.get_container_status(user.container_id)
+            if status != 'running':
+                # Container neu starten
+                container_mgr.start_container(user.container_id)
+        except Exception as e:
+            current_app.logger.warning(f"Container-Start fehlgeschlagen: {str(e)}")
 
-    # Neuen User anlegen
-    user = User(username=username, email=email)
-    user.set_password(password)
-    user.is_admin = is_first_user
-    user.state = UserState.REGISTERED.value
-    user.verification_token = generate_verification_token()
-    user.verification_sent_at = datetime.utcnow()
-
-    db.session.add(user)
+    user.last_used = datetime.utcnow()
     db.session.commit()
 
-    # Verifizierungs-Email senden
-    frontend_url = Config.FRONTEND_URL
-    email_sent = send_verification_email(
-        user.email,
-        user.username,
-        user.verification_token,
-        frontend_url
+    # JWT erstellen
+    expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
+    access_token = create_access_token(
+        identity=str(user.id),
+        expires_delta=expires,
+        additional_claims={'is_admin': user.is_admin}
     )
 
-    if not email_sent:
-        current_app.logger.warning(f"Verifizierungs-Email konnte nicht gesendet werden an {user.email}")
+    current_app.logger.info(f"[LOGIN] User {user.email} erfolgreich eingeloggt")
 
     return jsonify({
-        'message': 'Registrierung erfolgreich. Bitte pruefe dein Postfach und bestatige deine Email-Adresse.',
+        'access_token': access_token,
+        'token_type': 'Bearer',
+        'expires_in': int(expires.total_seconds()),
         'user': {
             'id': user.id,
-            'username': user.username,
             'email': user.email,
-            'is_admin': user.is_admin
-        },
-        'email_sent': email_sent
-    }), 201
+            'slug': user.slug,
+            'is_admin': user.is_admin,
+            'state': user.state,
+            'container_id': user.container_id
+        }
+    }), 200
 
 
 @api_bp.route('/auth/logout', methods=['POST'])
@@ -168,71 +305,6 @@ def api_logout():
     jti = get_jwt()['jti']
     token_blacklist.add(jti)
     return jsonify({'message': 'Erfolgreich abgemeldet'}), 200
-
-
-@api_bp.route('/auth/verify', methods=['GET'])
-def api_verify_email():
-    """Email-Verifizierung ueber Token-Link"""
-    token = request.args.get('token')
-    frontend_url = Config.FRONTEND_URL
-
-    if not token:
-        return redirect(f"{frontend_url}/verify-error?reason=missing_token")
-
-    user = User.query.filter_by(verification_token=token).first()
-
-    if not user:
-        return redirect(f"{frontend_url}/verify-error?reason=invalid_token")
-
-    # Token invalidieren und Status aktualisieren
-    user.verification_token = None
-    user.state = UserState.VERIFIED.value
-    db.session.commit()
-
-    current_app.logger.info(f"User {user.username} hat Email verifiziert")
-    return redirect(f"{frontend_url}/verify-success?verified=true")
-
-
-@api_bp.route('/auth/resend-verification', methods=['POST'])
-def api_resend_verification():
-    """Sendet Verifizierungs-Email erneut"""
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Keine Daten uebermittelt'}), 400
-
-    email = data.get('email')
-
-    if not email:
-        return jsonify({'error': 'Email erforderlich'}), 400
-
-    user = User.query.filter_by(email=email).first()
-
-    if not user:
-        # Aus Sicherheitsgruenden kein Fehler wenn User nicht existiert
-        return jsonify({'message': 'Falls die Email registriert ist, wurde eine neue Verifizierungs-Email gesendet.'}), 200
-
-    if user.state != UserState.REGISTERED.value:
-        return jsonify({'error': 'Email bereits verifiziert'}), 400
-
-    # Neuen Token generieren
-    user.verification_token = generate_verification_token()
-    user.verification_sent_at = datetime.utcnow()
-    db.session.commit()
-
-    # Email senden
-    frontend_url = Config.FRONTEND_URL
-    email_sent = send_verification_email(
-        user.email,
-        user.username,
-        user.verification_token,
-        frontend_url
-    )
-
-    return jsonify({
-        'message': 'Falls die Email registriert ist, wurde eine neue Verifizierungs-Email gesendet.',
-        'email_sent': email_sent
-    }), 200
 
 
 @api_bp.route('/user/me', methods=['GET'])
@@ -248,7 +320,7 @@ def api_user_me():
     # Service-URL berechnen
     scheme = current_app.config['PREFERRED_URL_SCHEME']
     spawner_domain = f"{current_app.config['SPAWNER_SUBDOMAIN']}.{current_app.config['BASE_DOMAIN']}"
-    service_url = f"{scheme}://{spawner_domain}/{user.username}"
+    service_url = f"{scheme}://{spawner_domain}/{user.slug}"
 
     # Container-Status abrufen
     container_status = 'unknown'
@@ -262,8 +334,8 @@ def api_user_me():
     return jsonify({
         'user': {
             'id': user.id,
-            'username': user.username,
             'email': user.email,
+            'slug': user.slug,
             'is_admin': user.is_admin,
             'state': user.state,
             'last_used': user.last_used.isoformat() if user.last_used else None,
@@ -324,7 +396,7 @@ def api_container_restart():
 
     # Neuen Container starten
     try:
-        container_id, port = container_mgr.spawn_container(user.id, user.username)
+        container_id, port = container_mgr.spawn_container(user.id, user.slug)
         user.container_id = container_id
         user.container_port = port
 

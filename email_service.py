@@ -1,11 +1,13 @@
 """
-Email-Service fuer Verifizierungs-Emails
+Email-Service fuer Verifizierungs-Emails und Magic Links
 """
 import smtplib
 import secrets
+import hashlib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import Config
+from datetime import datetime, timedelta
 
 
 def generate_verification_token():
@@ -13,26 +15,71 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 
-def send_verification_email(user_email, username, token, base_url=None):
+def generate_slug_from_email(email: str) -> str:
     """
-    Sendet eine Verifizierungs-Email an den Benutzer.
+    Generiert eindeutigen Slug aus Email
+    Format: Erste 12 Zeichen von SHA256(email)
+    """
+    email_lower = email.lower().strip()
+    hash_obj = hashlib.sha256(email_lower.encode())
+    slug = hash_obj.hexdigest()[:12]
+    return slug
+
+
+def generate_magic_link_token() -> str:
+    """
+    Generiert sicheren Token für Magic Links
+    32 Byte = ~43 Zeichen URL-safe Base64
+    """
+    return secrets.token_urlsafe(32)
+
+
+def check_rate_limit(email: str) -> bool:
+    """
+    Prüft ob User zu viele Magic Links angefordert hat
+    Max. 3 Tokens pro Email in den letzten 60 Minuten
+
+    Returns:
+        True wenn OK, False wenn Rate Limit erreicht
+    """
+    from models import User, MagicLinkToken
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return True  # Neue Email, kein Limit
+
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_tokens = MagicLinkToken.query.filter(
+        MagicLinkToken.user_id == user.id,
+        MagicLinkToken.created_at >= one_hour_ago
+    ).count()
+
+    return recent_tokens < 3
+
+
+def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
+    """
+    Sendet Magic Link Email
 
     Args:
-        user_email: Email-Adresse des Benutzers
-        username: Benutzername
-        token: Verifizierungs-Token
-        base_url: Basis-URL fuer den Verifizierungs-Link (optional)
+        email: Empfänger-Email
+        token: Magic Link Token
+        token_type: 'signup' oder 'login'
 
     Returns:
         True bei Erfolg, False bei Fehler
     """
-    if base_url is None:
-        base_url = Config.FRONTEND_URL
-
-    verify_url = f"{base_url}/verify-success?token={token}"
-
-    # Email-Inhalt
-    subject = "Bestatige deine Email-Adresse - Container Spawner"
+    # URL basierend auf Type
+    if token_type == 'signup':
+        verify_url = f"{Config.FRONTEND_URL}/verify-signup?token={token}"
+        subject = "Registrierung abschließen - Container Spawner"
+        action_text = "Registrierung abschließen"
+        greeting = "Vielen Dank für deine Registrierung!"
+    else:  # login
+        verify_url = f"{Config.FRONTEND_URL}/verify-login?token={token}"
+        subject = "Login-Link - Container Spawner"
+        action_text = "Jetzt einloggen"
+        greeting = "Hier ist dein Login-Link:"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -54,17 +101,16 @@ def send_verification_email(user_email, username, token, base_url=None):
                 <h1>Container Spawner</h1>
             </div>
             <div class="content">
-                <h2>Hallo {username}!</h2>
-                <p>Vielen Dank fuer deine Registrierung beim Container Spawner.</p>
-                <p>Bitte bestatige deine Email-Adresse, indem du auf den folgenden Button klickst:</p>
+                <p>{greeting}</p>
+                <p>Klicke auf den Button, um fortzufahren:</p>
                 <p style="text-align: center;">
-                    <a href="{verify_url}" class="button">Email bestätigen</a>
+                    <a href="{verify_url}" class="button">{action_text}</a>
                 </p>
                 <p>Oder kopiere diesen Link in deinen Browser:</p>
                 <p style="word-break: break-all; background: #eee; padding: 10px; border-radius: 3px;">
                     {verify_url}
                 </p>
-                <p><strong>Hinweis:</strong> Dieser Link ist nur einmal verwendbar.</p>
+                <p><small>Dieser Link ist 15 Minuten gültig und kann nur einmal verwendet werden.</small></p>
             </div>
             <div class="footer">
                 <p>Diese Email wurde automatisch generiert. Bitte antworte nicht darauf.</p>
@@ -75,112 +121,13 @@ def send_verification_email(user_email, username, token, base_url=None):
     """
 
     text_content = f"""
-    Hallo {username}!
+    {greeting}
 
-    Vielen Dank fuer deine Registrierung beim Container Spawner.
-
-    Bitte bestatige deine Email-Adresse, indem du folgenden Link oeffnest:
+    Bitte öffne folgenden Link oder kopiere ihn in deinen Browser:
 
     {verify_url}
 
-    Hinweis: Dieser Link ist nur einmal verwendbar.
-
-    ---
-    Diese Email wurde automatisch generiert.
-    """
-
-    # Email erstellen
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = Config.SMTP_FROM
-    msg['To'] = user_email
-
-    # Text- und HTML-Teil hinzufuegen
-    part1 = MIMEText(text_content, 'plain', 'utf-8')
-    part2 = MIMEText(html_content, 'html', 'utf-8')
-    msg.attach(part1)
-    msg.attach(part2)
-
-    try:
-        # SMTP-Verbindung
-        if Config.SMTP_USE_TLS:
-            server = smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT)
-            server.starttls()
-        else:
-            server = smtplib.SMTP(Config.SMTP_HOST, Config.SMTP_PORT)
-
-        # Authentifizierung wenn konfiguriert
-        if Config.SMTP_USER and Config.SMTP_PASSWORD:
-            server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
-
-        # Email senden
-        server.sendmail(Config.SMTP_FROM, user_email, msg.as_string())
-        server.quit()
-
-        print(f"[EMAIL] Verifizierungs-Email gesendet an {user_email}")
-        return True
-
-    except Exception as e:
-        print(f"[EMAIL] Fehler beim Senden der Email an {user_email}: {str(e)}")
-        return False
-
-
-def send_password_reset_email(user_email, username, new_password):
-    """
-    Sendet eine Email mit dem neuen Passwort an den Benutzer.
-
-    Args:
-        user_email: Email-Adresse des Benutzers
-        username: Benutzername
-        new_password: Das neue Passwort
-
-    Returns:
-        True bei Erfolg, False bei Fehler
-    """
-    subject = "Dein Passwort wurde zurueckgesetzt - Container Spawner"
-
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: #1a1a2e; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 30px; background: #f9f9f9; }}
-            .password {{ background: #eee; padding: 15px; font-family: monospace; font-size: 18px; text-align: center; border-radius: 5px; }}
-            .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Container Spawner</h1>
-            </div>
-            <div class="content">
-                <h2>Hallo {username}!</h2>
-                <p>Ein Administrator hat dein Passwort zurueckgesetzt.</p>
-                <p>Dein neues Passwort lautet:</p>
-                <p class="password">{new_password}</p>
-                <p><strong>Wichtig:</strong> Bitte aendere dieses Passwort nach dem ersten Login!</p>
-            </div>
-            <div class="footer">
-                <p>Diese Email wurde automatisch generiert. Bitte antworte nicht darauf.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-    text_content = f"""
-    Hallo {username}!
-
-    Ein Administrator hat dein Passwort zurueckgesetzt.
-
-    Dein neues Passwort lautet: {new_password}
-
-    Wichtig: Bitte aendere dieses Passwort nach dem ersten Login!
+    Hinweis: Dieser Link ist 15 Minuten gültig und kann nur einmal verwendet werden.
 
     ---
     Diese Email wurde automatisch generiert.
@@ -189,7 +136,7 @@ def send_password_reset_email(user_email, username, new_password):
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = Config.SMTP_FROM
-    msg['To'] = user_email
+    msg['To'] = email
 
     part1 = MIMEText(text_content, 'plain', 'utf-8')
     part2 = MIMEText(html_content, 'html', 'utf-8')
@@ -206,12 +153,12 @@ def send_password_reset_email(user_email, username, new_password):
         if Config.SMTP_USER and Config.SMTP_PASSWORD:
             server.login(Config.SMTP_USER, Config.SMTP_PASSWORD)
 
-        server.sendmail(Config.SMTP_FROM, user_email, msg.as_string())
+        server.sendmail(Config.SMTP_FROM, email, msg.as_string())
         server.quit()
 
-        print(f"[EMAIL] Passwort-Reset-Email gesendet an {user_email}")
+        print(f"[EMAIL] Magic Link ({token_type}) gesendet an {email}")
         return True
 
     except Exception as e:
-        print(f"[EMAIL] Fehler beim Senden der Email an {user_email}: {str(e)}")
+        print(f"[EMAIL] Fehler beim Senden der Email an {email}: {str(e)}")
         return False

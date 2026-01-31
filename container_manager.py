@@ -17,14 +17,14 @@ class ContainerManager:
                 raise Exception(f"Docker connection failed: {str(e)}")
         return self.client
     
-    def spawn_container(self, user_id, username):
+    def spawn_container(self, user_id, slug):
         """Spawnt einen neuen Container für den User"""
         try:
-            existing = self._get_user_container(username)
+            existing = self._get_user_container(slug)
             if existing and existing.status == 'running':
                 return existing.id, self._get_container_port(existing)
 
-            # Pfad-basiertes Routing: User unter coder.wieland.org/username
+            # Pfad-basiertes Routing: User unter coder.domain.org/<slug>
             base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
 
             # Labels vorbereiten
@@ -34,12 +34,12 @@ class ContainerManager:
 
                 # HTTPS Router mit PathPrefix
                 f'traefik.http.routers.user{user_id}.rule':
-                    f'Host(`{base_host}`) && PathPrefix(`/{username}`)',
+                    f'Host(`{base_host}`) && PathPrefix(`/{slug}`)',
                 f'traefik.http.routers.user{user_id}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
                 f'traefik.http.routers.user{user_id}.priority': '100',
-                # StripPrefix Middleware - entfernt /{username} bevor Container Request erhält
+                # StripPrefix Middleware - entfernt /{slug} bevor Container Request erhält
                 f'traefik.http.routers.user{user_id}.middlewares': f'user{user_id}-strip',
-                f'traefik.http.middlewares.user{user_id}-strip.stripprefix.prefixes': f'/{username}',
+                f'traefik.http.middlewares.user{user_id}-strip.stripprefix.prefixes': f'/{slug}',
                 # TLS für HTTPS
                 f'traefik.http.routers.user{user_id}.tls': 'true',
                 f'traefik.http.routers.user{user_id}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
@@ -49,12 +49,12 @@ class ContainerManager:
 
                 # Metadata
                 'spawner.user_id': str(user_id),
-                'spawner.username': username,
+                'spawner.slug': slug,
                 'spawner.managed': 'true'
             }
 
             # Logging: Traefik-Labels ausgeben
-            print(f"[SPAWNER] Creating container user-{username}-{user_id}")
+            print(f"[SPAWNER] Creating container user-{slug}-{user_id}")
             print(f"[SPAWNER] Traefik Labels:")
             for key, value in labels.items():
                 if 'traefik' in key:
@@ -62,13 +62,13 @@ class ContainerManager:
 
             container = self._get_client().containers.run(
                 Config.USER_TEMPLATE_IMAGE,
-                name=f"user-{username}-{user_id}",
+                name=f"user-{slug}-{user_id}",
                 detach=True,
                 network=Config.TRAEFIK_NETWORK,
                 labels=labels,
                 environment={
                     'USER_ID': str(user_id),
-                    'USERNAME': username
+                    'USER_SLUG': slug
                 },
                 restart_policy={'Name': 'unless-stopped'},
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
@@ -76,7 +76,7 @@ class ContainerManager:
             )
 
             print(f"[SPAWNER] Container created: {container.id[:12]}")
-            print(f"[SPAWNER] URL: https://{base_host}/{username}")
+            print(f"[SPAWNER] URL: https://{base_host}/{slug}")
             return container.id, 8080
             
         except docker.errors.ImageNotFound as e:
@@ -91,6 +91,17 @@ class ContainerManager:
             print(f"[SPAWNER] ERROR: {str(e)}")
             raise
     
+    def start_container(self, container_id):
+        """Startet einen gestoppten User-Container"""
+        try:
+            container = self._get_client().containers.get(container_id)
+            if container.status != 'running':
+                container.start()
+                print(f"[SPAWNER] Container {container_id[:12]} gestartet")
+            return True
+        except docker.errors.NotFound:
+            return False
+
     def stop_container(self, container_id):
         """Stoppt einen User-Container"""
         try:
@@ -117,9 +128,9 @@ class ContainerManager:
         except docker.errors.NotFound:
             return 'not_found'
     
-    def _get_user_container(self, username):
+    def _get_user_container(self, slug):
         """Findet existierenden Container für User"""
-        filters = {'label': f'spawner.username={username}'}
+        filters = {'label': f'spawner.slug={slug}'}
         containers = self._get_client().containers.list(all=True, filters=filters)
         return containers[0] if containers else None
     

@@ -14,17 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Container, Loader2, Mail, CheckCircle2 } from "lucide-react";
+import { Container, Loader2, Mail, AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [signupSuccess, setSignupSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
 
   const { signup, user, isLoading } = useAuth();
   const router = useRouter();
@@ -39,36 +35,18 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwoerter stimmen nicht ueberein");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen lang sein");
-      return;
-    }
-
-    if (username.length < 3) {
-      setError("Benutzername muss mindestens 3 Zeichen lang sein");
-      return;
-    }
-
-    // Validiere Username-Format
-    if (!/^[a-zA-Z0-9-]+$/.test(username)) {
-      setError("Benutzername darf nur Buchstaben, Zahlen und Bindestriche enthalten");
+    if (!email) {
+      setError("Bitte gib deine Email-Adresse ein");
       return;
     }
 
     setIsSubmitting(true);
-
-    const result = await signup(username, email, password);
+    const result = await signup(email);
 
     if (result.success) {
-      setSignupSuccess(true);
-      setSuccessMessage(result.message || "Registrierung erfolgreich!");
+      setEmailSent(true);
     } else {
-      setError(result.error || "Registrierung fehlgeschlagen");
+      setError(result.message || "Registrierung fehlgeschlagen");
       setIsSubmitting(false);
     }
   };
@@ -81,48 +59,6 @@ export default function SignupPage() {
     );
   }
 
-  // Erfolgsanzeige nach Registrierung
-  if (signupSuccess) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted/50 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl font-bold">
-              Registrierung erfolgreich!
-            </CardTitle>
-            <CardDescription>{successMessage}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-md border bg-muted/50 p-4">
-              <div className="flex items-start gap-3">
-                <Mail className="mt-0.5 h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium">Pruefe dein Postfach</p>
-                  <p className="text-sm text-muted-foreground">
-                    Wir haben eine Verifizierungs-Email an{" "}
-                    <strong>{email}</strong> gesendet. Klicke auf den Link in
-                    der Email, um dein Konto zu aktivieren.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="text-center text-sm text-muted-foreground">
-              <p>Keine Email erhalten?</p>
-              <p>Pruefe deinen Spam-Ordner oder versuche dich anzumelden,</p>
-              <p>um eine neue Verifizierungs-Email anzufordern.</p>
-            </div>
-            <Button asChild className="w-full">
-              <Link href="/login">Zum Login</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
@@ -130,88 +66,84 @@ export default function SignupPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
             <Container className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-bold">Konto erstellen</CardTitle>
+          <CardTitle className="text-2xl font-bold">Registrierung</CardTitle>
           <CardDescription>
-            Registriere dich, um deinen eigenen Container zu erhalten
+            Gib deine Email-Adresse ein, um einen Account zu erstellen
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+          {emailSent ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-green-200 bg-green-50 p-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-5 w-5 text-green-600" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-green-800">
+                      Email gesendet!
+                    </p>
+                    <p className="text-sm text-green-700">
+                      Wir haben dir einen Registrierungs-Link an <strong>{email}</strong> gesendet.
+                      Bitte überprüfe dein Postfach und klicke auf den Link, um deine Registrierung abzuschließen.
+                    </p>
+                    <p className="text-xs text-green-600">
+                      Der Link ist 15 Minuten gültig.
+                    </p>
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="username">Benutzername</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="dein-username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                disabled={isSubmitting}
-              />
-              <p className="text-xs text-muted-foreground">
-                Nur Buchstaben, Zahlen und Bindestriche. Wird Teil deiner
-                Service-URL.
-              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setEmailSent(false);
+                  setEmail("");
+                }}
+              >
+                Neue Email anfordern
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">E-Mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@beispiel.de"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isSubmitting}
-              />
-              <p className="text-xs text-muted-foreground">
-                Du erhaeltst eine Verifizierungs-Email an diese Adresse.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Passwort</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Mindestens 6 Zeichen"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Passwort bestaetigen</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Passwort wiederholen"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registrierung laeuft...
-                </>
-              ) : (
-                "Registrieren"
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                </div>
               )}
-            </Button>
-          </form>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email-Adresse</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="deine@email.de"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Registrierungs-Link wird gesendet...
+                  </>
+                ) : (
+                  "Registrierungs-Link anfordern"
+                )}
+              </Button>
+            </form>
+          )}
+
           <div className="mt-6 text-center text-sm">
             Bereits ein Konto?{" "}
             <Link href="/login" className="text-primary hover:underline">
-              Anmelden
+              Zum Login
             </Link>
           </div>
         </CardContent>

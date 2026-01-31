@@ -1,6 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from enum import Enum
 
@@ -17,9 +16,8 @@ class UserState(Enum):
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(12), unique=True, nullable=False, index=True)
     container_id = db.Column(db.String(100), nullable=True)
     container_port = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -34,8 +32,6 @@ class User(UserMixin, db.Model):
 
     # Email-Verifizierung und Status
     state = db.Column(db.String(20), default=UserState.REGISTERED.value, nullable=False)
-    verification_token = db.Column(db.String(64), nullable=True)
-    verification_sent_at = db.Column(db.DateTime, nullable=True)
 
     # Aktivitaetstracking
     last_used = db.Column(db.DateTime, nullable=True)
@@ -43,18 +39,12 @@ class User(UserMixin, db.Model):
     # Beziehung fuer blocked_by
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
     def to_dict(self):
         """Konvertiert User zu Dictionary fuer API-Responses"""
         return {
             'id': self.id,
-            'username': self.username,
             'email': self.email,
+            'slug': self.slug,
             'is_admin': self.is_admin,
             'is_blocked': self.is_blocked,
             'blocked_at': self.blocked_at.isoformat() if self.blocked_at else None,
@@ -63,6 +53,34 @@ class User(UserMixin, db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'container_id': self.container_id
         }
+
+
+class MagicLinkToken(db.Model):
+    """Magic Link Tokens für Passwordless Authentication"""
+    __tablename__ = 'magic_link_token'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    token_type = db.Column(db.String(20), nullable=False)  # 'signup' oder 'login'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+
+    user = db.relationship('User', backref=db.backref('magic_tokens', lazy=True))
+
+    def is_valid(self):
+        """Prüft ob Token noch gültig ist"""
+        if self.used_at is not None:
+            return False  # Token bereits verwendet
+        if datetime.utcnow() > self.expires_at:
+            return False  # Token abgelaufen
+        return True
+
+    def mark_as_used(self):
+        """Markiert Token als verwendet"""
+        self.used_at = datetime.utcnow()
 
 
 class AdminTakeoverSession(db.Model):
