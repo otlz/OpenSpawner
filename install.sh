@@ -10,6 +10,7 @@ REPO_URL="https://gitea.iotxs.de/RainerWieland/spawner.git"
 RAW_URL="https://gitea.iotxs.de/RainerWieland/spawner/raw/branch/main"
 INSTALL_DIR="${PWD}"
 VERSION="0.1.0"
+LOG_FILE="${INSTALL_DIR}/spawner-install.log"
 
 # Farben fuer Output
 RED='\033[0;31m'
@@ -75,6 +76,10 @@ echo "============================================================"
 echo "  Container Spawner Installation v${VERSION}"
 echo "============================================================"
 echo ""
+
+# Log-Datei initialisieren
+echo "=== Spawner Installation $(date) ===" > "${LOG_FILE}"
+echo "" >> "${LOG_FILE}"
 
 # ============================================================
 # 1. Pruefe .env
@@ -381,8 +386,10 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
     echo ""
 
     # Build ausfuehren und Output in Datei speichern
-    BUILD_LOG="/tmp/build-user-template.log"
-    docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/" > "${BUILD_LOG}" 2>&1
+    BUILD_LOG="${LOG_FILE}"
+    echo "" >> "${LOG_FILE}"
+    echo "=== Build: user-service-template ===" >> "${LOG_FILE}"
+    docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/" >> "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     # Gefilterten Output anzeigen
@@ -395,8 +402,9 @@ if [ -d "${INSTALL_DIR}/user-template" ]; then
     else
         echo ""
         echo -e "  user-service-template: ${RED}FEHLER${NC}"
-        echo "  Build-Log:"
-        cat "${BUILD_LOG}"
+        echo "  Siehe Build-Log: ${LOG_FILE}"
+        echo "  Letzte 50 Zeilen:"
+        tail -50 "${BUILD_LOG}"
         exit 1
     fi
 fi
@@ -407,8 +415,10 @@ if [ -d "${INSTALL_DIR}/user-template-next" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    BUILD_LOG="/tmp/build-user-template-next.log"
-    docker build --no-cache -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" > "${BUILD_LOG}" 2>&1
+    BUILD_LOG="${LOG_FILE}"
+    echo "" >> "${LOG_FILE}"
+    echo "=== Build: user-template-next ===" >> "${LOG_FILE}"
+    docker build --no-cache -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" >> "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
@@ -426,8 +436,10 @@ fi
 echo "  [3/4] Baue Spawner API (Flask Backend)..."
 echo ""
 
-BUILD_LOG="/tmp/build-spawner.log"
-docker build --no-cache -t spawner:latest "${INSTALL_DIR}/" > "${BUILD_LOG}" 2>&1
+BUILD_LOG="${LOG_FILE}"
+echo "" >> "${LOG_FILE}"
+echo "=== Build: spawner-api ===" >> "${LOG_FILE}"
+docker build --no-cache -t spawner:latest "${INSTALL_DIR}/" >> "${BUILD_LOG}" 2>&1
 BUILD_EXIT=$?
 
 grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
@@ -436,12 +448,13 @@ if [ $BUILD_EXIT -eq 0 ] && docker image inspect spawner:latest >/dev/null 2>&1;
     echo ""
     echo -e "  spawner-api: ${GREEN}OK${NC}"
 else
-    echo ""
-    echo -e "  spawner-api: ${RED}FEHLER${NC}"
-    echo "  Build-Log:"
-    cat "${BUILD_LOG}"
-    exit 1
-fi
+        echo ""
+        echo -e "  spawner-api: ${RED}FEHLER${NC}"
+        echo "  Siehe Build-Log: ${LOG_FILE}"
+        echo "  Letzte 50 Zeilen:"
+        tail -50 "${BUILD_LOG}"
+        exit 1
+    fi
 
 # Frontend Image bauen
 if [ -d "${INSTALL_DIR}/frontend" ]; then
@@ -449,8 +462,10 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
     echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
     echo ""
 
-    BUILD_LOG="/tmp/build-frontend.log"
-    docker build --no-cache -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" > "${BUILD_LOG}" 2>&1
+    BUILD_LOG="${LOG_FILE}"
+    echo "" >> "${LOG_FILE}"
+    echo "=== Build: spawner-frontend ===" >> "${LOG_FILE}"
+    docker build --no-cache -t spawner-frontend:latest "${INSTALL_DIR}/frontend/" >> "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
@@ -461,7 +476,8 @@ if [ -d "${INSTALL_DIR}/frontend" ]; then
     else
         echo ""
         echo -e "  spawner-frontend: ${RED}FEHLER${NC}"
-        echo "  Build-Log (letzte 50 Zeilen):"
+        echo "  Siehe Build-Log: ${LOG_FILE}"
+        echo "  Letzte 50 Zeilen:"
         tail -50 "${BUILD_LOG}"
         exit 1
     fi
@@ -505,6 +521,7 @@ echo "============================================================"
 echo -e "  ${GREEN}Installation abgeschlossen!${NC}"
 echo "============================================================"
 echo ""
+echo "Installations-Log: ${LOG_FILE}"
 
 # URLs anzeigen
 SCHEME="https"
