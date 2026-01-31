@@ -167,11 +167,12 @@ junit.xml
 # CLAUDE.md enthaelt projektspezifische Instruktionen fuer Claude Code
 # Kann bei Bedarf auskommentiert werden um es zu behalten
 CLAUDE.md
-
+.claude/
 # AGENTS.md - Guide fuer agentic coding assistants
 # Wird von AI-Assistenten zum Verstaendnis der Codebase verwendet
 # Sollte nicht gepusht werden
 AGENTS.md
+-AGENTS.md
 
 # ============================================================
 # Misc
