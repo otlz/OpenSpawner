@@ -7,7 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installiere alle Packages (incl. devDependencies fuer TypeScript Build)
-RUN npm ci --prefer-offline --no-audit && \
+# Fallback zu npm install wenn package-lock.json nicht existiert
+RUN if [ -f package-lock.json ]; then npm ci --prefer-offline --no-audit; else npm install; fi && \
     npm cache clean --force
 
 # Copy Source Code
