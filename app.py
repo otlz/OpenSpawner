@@ -83,7 +83,7 @@ def dashboard():
     # Service-URL für den User (pfad-basiert)
     scheme = app.config['PREFERRED_URL_SCHEME']
     spawner_domain = f"{app.config['SPAWNER_SUBDOMAIN']}.{app.config['BASE_DOMAIN']}"
-    service_url = f"{scheme}://{spawner_domain}/{current_user.username}"
+    service_url = f"{scheme}://{spawner_domain}/{current_user.slug}"
 
     return render_template('dashboard.html',
                          user=current_user,
@@ -103,7 +103,7 @@ def restart_container():
     
     # Neuen Container starten
     try:
-        container_id, port = container_mgr.spawn_container(current_user.id, current_user.username)
+        container_id, port = container_mgr.spawn_container(current_user.id, current_user.slug)
         current_user.container_id = container_id
         current_user.container_port = port
         db.session.commit()
