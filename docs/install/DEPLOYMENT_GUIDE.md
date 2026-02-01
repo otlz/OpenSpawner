@@ -592,7 +592,7 @@ curl -H "X-Debug-Token: xxx" \
   "http://localhost:5000/api/admin/debug?action=view-logs"
 ```
 
-Zeigt die **letzten 100 Zeilen** der Docker Container Logs (entspricht `docker logs spawner --tail 100`).
+Zeigt die **letzten 100 Zeilen** der Flask Log-Datei (`/app/logs/spawner.log`). Enthält alle API-Anfragen, Fehler und Debug-Meldungen.
 
 #### 2. Logs löschen (clear-logs)
 
@@ -601,14 +601,13 @@ curl -H "X-Debug-Token: xxx" \
   "http://localhost:5000/api/admin/debug?action=clear-logs"
 ```
 
-**Docker-Logs können nicht gelöscht werden!** Diese Action ist informativ. Um Logs zu löschen, nutze stattdessen:
+Löscht die Log-Datei komplett. Um Logs zu löschen, nutze auch direkt im Container:
 
 ```bash
-docker-compose down
-docker-compose up -d spawner
+docker exec spawner rm /app/logs/spawner.log
 ```
 
-Das startet den Container neu und die Logs werden geleert.
+Nach dem Löschen werden neue Logs ab der nächsten Aktion geschrieben.
 
 #### 3. User entfernen (delete-email)
 

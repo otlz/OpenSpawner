@@ -9,6 +9,9 @@ from api import api_bp, check_if_token_revoked
 from admin_api import admin_bp
 from config import Config
 from container_manager import ContainerManager
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
 # Flask-App initialisieren
 app = Flask(__name__)
@@ -45,6 +48,29 @@ def invalid_token_callback(error):
 @jwt.unauthorized_loader
 def missing_token_callback(error):
     return jsonify({'error': 'Authentifizierung erforderlich'}), 401
+
+# ========================================
+# Logging konfigurieren
+# ========================================
+log_file = app.config.get('LOG_FILE', '/app/logs/spawner.log')
+log_dir = os.path.dirname(log_file)
+
+# Erstelle Log-Verzeichnis falls nicht vorhanden
+if log_dir and not os.path.exists(log_dir):
+    os.makedirs(log_dir, exist_ok=True)
+
+# Rotating File Handler (max 10MB pro Datei, 5 Backups)
+if log_file:
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10485760,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
 
 # Flask-Login initialisieren
 login_manager = LoginManager()
