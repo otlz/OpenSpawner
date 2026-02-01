@@ -22,19 +22,38 @@ services:
       - ./logs:/app/logs
 
     environment:
-      # Aus .env-Datei
+      # Aus .env-Datei - Sicherheit
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-${SECRET_KEY}}
+      # Domain & Routing
       - BASE_DOMAIN=${BASE_DOMAIN}
-      - TRAEFIK_NETWORK=${TRAEFIK_NETWORK}
-      - USER_TEMPLATE_IMAGE=${USER_TEMPLATE_IMAGE:-user-service-template:latest}
       - SPAWNER_SUBDOMAIN=${SPAWNER_SUBDOMAIN:-coder}
       - CORS_ORIGINS=https://${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN},http://localhost:3000
-      # Traefik-Konfiguration
+      # Docker & Traefik
+      - TRAEFIK_NETWORK=${TRAEFIK_NETWORK}
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      # Templates (Dynamisches System)
+      - USER_TEMPLATE_IMAGE=${USER_TEMPLATE_IMAGE:-user-template-01:latest}
+      - USER_TEMPLATE_IMAGES=${USER_TEMPLATE_IMAGES:-"user-template-01:latest;user-template-02:latest;user-template-next:latest"}
+      # Traefik-Zertifikate
       - TRAEFIK_CERTRESOLVER=${TRAEFIK_CERTRESOLVER:-lets-encrypt}
       - TRAEFIK_ENTRYPOINT=${TRAEFIK_ENTRYPOINT:-websecure}
-      # Docker-Verbindung
-      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      # SMTP & Email
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - FRONTEND_URL=${FRONTEND_URL}
+      # Magic Links
+      - MAGIC_LINK_TOKEN_EXPIRY=${MAGIC_LINK_TOKEN_EXPIRY:-900}
+      - MAGIC_LINK_RATE_LIMIT=${MAGIC_LINK_RATE_LIMIT:-3}
+      # JWT
+      - JWT_ACCESS_TOKEN_EXPIRES=${JWT_ACCESS_TOKEN_EXPIRES:-3600}
+      # Ressourcen-Limits
+      - DEFAULT_MEMORY_LIMIT=${DEFAULT_MEMORY_LIMIT:-512m}
+      - DEFAULT_CPU_QUOTA=${DEFAULT_CPU_QUOTA:-50000}
 
     networks:
       - web
