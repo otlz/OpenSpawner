@@ -365,34 +365,33 @@ def debug_management():
 
     # ===== view-logs =====
     if action == 'view-logs':
-        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
         try:
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                last_100 = lines[-100:] if len(lines) > 100 else lines
+            import subprocess
+            # Lese Docker Container Logs
+            result = subprocess.run(
+                ['docker', 'logs', '--tail', '100', 'spawner'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            logs = result.stdout if result.returncode == 0 else result.stderr
+
             return jsonify({
                 'action': 'view-logs',
-                'lines': len(lines),
-                'last_100': ''.join(last_100)
+                'source': 'docker logs spawner',
+                'lines': len(logs.split('\n')),
+                'logs': logs
             }), 200
-        except FileNotFoundError:
-            return jsonify({'error': 'Log-Datei nicht gefunden'}), 404
         except Exception as e:
             return jsonify({'error': f'Fehler beim Lesen der Logs: {str(e)}'}), 500
 
     # ===== clear-logs =====
     elif action == 'clear-logs':
-        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
-        try:
-            with open(log_file, 'w') as f:
-                f.write('')
-            current_app.logger.info('[DEBUG] Logs wurden gelöscht')
-            return jsonify({
-                'action': 'clear-logs',
-                'message': 'Logs wurden gelöscht'
-            }), 200
-        except Exception as e:
-            return jsonify({'error': f'Fehler beim Löschen der Logs: {str(e)}'}), 500
+        return jsonify({
+            'action': 'clear-logs',
+            'message': 'Docker-Logs können nicht gelöscht werden',
+            'info': 'Nutze stattdessen: docker-compose logs -f spawner --tail 1'
+        }), 200
 
     # ===== delete-email =====
     elif action == 'delete-email':
