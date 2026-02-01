@@ -592,7 +592,7 @@ curl -H "X-Debug-Token: xxx" \
   "http://localhost:5000/api/admin/debug?action=view-logs"
 ```
 
-Zeigt die **letzten 100 Zeilen** der Logs mit Zeilenanzahl.
+Zeigt die **letzten 100 Zeilen** der Docker Container Logs (entspricht `docker logs spawner --tail 100`).
 
 #### 2. Logs löschen (clear-logs)
 
@@ -601,7 +601,14 @@ curl -H "X-Debug-Token: xxx" \
   "http://localhost:5000/api/admin/debug?action=clear-logs"
 ```
 
-Löscht **alle Logs** komplett. Danach ist die Log-Datei leer.
+**Docker-Logs können nicht gelöscht werden!** Diese Action ist informativ. Um Logs zu löschen, nutze stattdessen:
+
+```bash
+docker-compose down
+docker-compose up -d spawner
+```
+
+Das startet den Container neu und die Logs werden geleert.
 
 #### 3. User entfernen (delete-email)
 
