@@ -2,8 +2,18 @@
 
 Anleitung zur Installation und Aktualisierung des Container Spawner.
 
+## 🚀 Quick Links
+
+- **[📋 Deployment Guide](./DEPLOYMENT_GUIDE.md)** - Vollständige Step-by-Step Anleitung für Deployment
+  - Phase 1: Vorbereitung (Daten bereinigen, Environment konfigurieren)
+  - Phase 2: Services starten
+  - Phase 3: Erste Registrierung
+  - Phase 4: Testing
+  - Troubleshooting, Monitoring, Security Checklist
+
 ## Inhaltsverzeichnis
 
+- [Quick Links](#quick-links)
 - [Voraussetzungen](#voraussetzungen)
 - [Neuinstallation](#neuinstallation)
 - [Update/Upgrade](#updateupgrade)
@@ -183,20 +193,38 @@ docker-compose up -d
 
 **Hinweis**: Die Email-Konfiguration wird fuer die Email-Verifizierung bei der Registrierung und fuer Passwort-Reset-Emails benoetigt.
 
-### User-Templates
+### User-Templates (Dynamisches System)
 
-Es stehen zwei Templates fuer User-Container zur Verfuegung:
+Das System unterstützt **beliebig viele User-Templates** durch ein dynamisches Konfigurationssystem:
+
+**Verfügbare Standard-Templates:**
 
 | Image | Verzeichnis | Beschreibung |
 |-------|-------------|--------------|
-| `user-service-template:latest` | `user-template/` | Einfache nginx-Willkommensseite (Standard) |
-| `user-template-next:latest` | `user-template-next/` | Moderne Next.js React-Anwendung |
+| `user-template-01:latest` | `user-template-01/` | Nginx Basic - Einfacher Nginx-Server |
+| `user-template-02:latest` | `user-template-02/` | Nginx Advanced - Nginx mit erweiterten Features |
+| `user-template-next:latest` | `user-template-next/` | Next.js Production - React-App mit Shadcn/UI |
 
-Um ein anderes Template zu verwenden, aendere `USER_TEMPLATE_IMAGE` in `.env`:
+**Konfiguration:**
+
+Templates werden in `.env` als semikolon-getrennte Liste definiert:
 
 ```bash
-USER_TEMPLATE_IMAGE=user-template-next:latest
+USER_TEMPLATE_IMAGES=user-template-01:latest;user-template-02:latest;user-template-next:latest
 ```
+
+**Automatisches Bauen:**
+
+Das `install.sh` Script erkennt automatisch alle `user-template-*` Verzeichnisse und baut sie.
+
+**Neues Template hinzufügen:**
+
+1. Erstelle `user-template-xyz/Dockerfile`
+2. Füge zu `.env` ein: `USER_TEMPLATE_IMAGES=...;user-template-xyz:latest`
+3. Füge Metadaten zu `templates.json` ein
+4. Führe `bash install.sh` aus
+
+Siehe auch: [CLAUDE.md - Dynamisches Template-System](../../CLAUDE.md#dynamisches-template-system)
 
 ### Produktions-Variablen
 

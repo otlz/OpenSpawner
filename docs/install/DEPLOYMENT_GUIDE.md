@@ -1,12 +1,17 @@
-# Multi-Container MVP - Deployment Guide
+# Container Spawner - Deployment Guide
 
 ## 🎯 Überblick
 
-Das Multi-Container MVP implementiert Unterstützung für 2 Container-Typen pro User:
-- **Development (dev)**: Nginx mit einfacher Willkommensseite
-- **Production (prod)**: Next.js mit Shadcn/UI
+Das System unterstützt **beliebig viele User-Templates** über ein dynamisches Konfigurationssystem:
+- Templates werden in `.env` definiert (semikolon-getrennt)
+- Metadaten (Namen, Beschreibungen) kommen aus `templates.json`
+- `install.sh` baut automatisch alle `user-template-*` Verzeichnisse
+- Jeder Benutzer kann beliebig viele Container verschiedener Typen erstellen
 
-Jeder Benutzer kann beide Container independent verwalten über das Dashboard.
+**Standardtemplates (können beliebig erweitert werden):**
+- **template-01**: Nginx Basic - Einfacher Nginx-Server mit statischen Dateien
+- **template-02**: Nginx Advanced - Nginx mit erweiterten Features
+- **template-next**: Next.js Production - React-App mit Shadcn/UI
 
 ---
 
@@ -40,23 +45,22 @@ rm -f spawner.db
 rm -rf logs/*
 ```
 
-#### 1.3 Template-Images bauen
+#### 1.3 Templates werden automatisch gebaut!
 ```bash
-# Development Template (Nginx)
-docker build -t user-service-template:latest user-template/
+# install.sh erkennt AUTOMATISCH alle user-template-* Verzeichnisse und baut sie:
+# - user-template-01/
+# - user-template-02/
+# - user-template-next/
+# etc.
 
-# Production Template (Next.js)
-docker build -t user-template-next:latest user-template-next/
+# Überprüfung der verfügbaren Template-Verzeichnisse:
+ls -d user-template*
 
-# Überprüfung
-docker images | grep user-
+# Expected output:
+# user-template-01  user-template-02  user-template-next
 ```
 
-**Erwartet Output:**
-```
-user-service-template     latest    abc123...    5 minutes ago   100MB
-user-template-next        latest    def456...    3 minutes ago   250MB
-```
+**WICHTIG:** Das `install.sh`-Script baut automatisch alle Templates - **keine manuellen Docker-Builds nötig**!
 
 #### 1.4 Environment konfigurieren
 ```bash
@@ -69,7 +73,7 @@ nano .env
 
 **Erforderliche Änderungen in .env:**
 ```bash
-# Neue Zeilen hinzufügen oder bestehende aktualisieren:
+# Pflichtfelder
 SECRET_KEY=<generiert mit: python3 -c "import secrets; print(secrets.token_hex(32))">
 BASE_DOMAIN=yourdomain.com
 SPAWNER_SUBDOMAIN=coder
@@ -77,9 +81,10 @@ TRAEFIK_NETWORK=web
 TRAEFIK_CERTRESOLVER=lets-encrypt
 TRAEFIK_ENTRYPOINT=websecure
 
-# Multi-Container Templates (NEU!)
-USER_TEMPLATE_IMAGE_DEV=user-service-template:latest
-USER_TEMPLATE_IMAGE_PROD=user-template-next:latest
+# Dynamische Template-Konfiguration (Semikolon-getrennt)
+# Liste aller verfügbaren Container-Images
+# Metadaten (Namen, Beschreibungen) werden aus templates.json geladen
+USER_TEMPLATE_IMAGES=user-template-01:latest;user-template-02:latest;user-template-next:latest
 
 # Optional: SMTP für Magic Links
 SMTP_HOST=smtp.example.com
@@ -89,6 +94,8 @@ SMTP_PASSWORD=password
 SMTP_FROM=noreply@example.com
 FRONTEND_URL=https://coder.yourdomain.com
 ```
+
+**Hinweis:** Behalte alle anderen Einstellungen aus `.env.example` (CORS, JWT, etc.)
 
 ### Phase 2: Services starten (10 Minuten)
 
@@ -153,8 +160,10 @@ https://coder.yourdomain.com
 6. Du wirst zum Dashboard weitergeleitet
 
 #### 3.3 Dashboard überprüfen
-- [ ] 2 Container-Cards sichtbar (Dev und Prod)
-- [ ] Beide haben Status "Noch nicht erstellt"
+- [ ] N Container-Cards sichtbar (entsprechend USER_TEMPLATE_IMAGES)
+  - Standardmäßig: template-01, template-02, template-next
+- [ ] Alle haben Status "Noch nicht erstellt"
+- [ ] Jede Card zeigt Display-Namen und Beschreibung aus `templates.json`
 - [ ] Buttons zeigen "Erstellen & Öffnen"
 
 ### Phase 4: Teste beide Container (10 Minuten)
@@ -506,5 +515,5 @@ EOF
 
 **Version**: 1.0.0 (MVP)
 **Deployment Date**: 2025-01-31
-**Last Updated**: 2025-01-31
+**Last Updated**: 2025-02-01
 **Status**: ✅ Ready for Production

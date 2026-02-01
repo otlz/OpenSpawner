@@ -1,4 +1,6 @@
 import os
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,24 +37,97 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # ========================================
-    # Docker-Konfiguration
+    # Docker-Konfiguration - DYNAMISCHES TEMPLATE-SYSTEM
     # ========================================
     DOCKER_SOCKET = os.getenv('DOCKER_SOCKET', 'unix://var/run/docker.sock')
-    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'user-service-template:latest')
 
-    # Multi-Container Templates
-    CONTAINER_TEMPLATES = {
-        'dev': {
-            'image': os.getenv('USER_TEMPLATE_IMAGE_DEV', 'user-service-template:latest'),
-            'display_name': 'Development Container',
-            'description': 'Nginx-basierter Development Container'
-        },
-        'prod': {
-            'image': os.getenv('USER_TEMPLATE_IMAGE_PROD', 'user-template-next:latest'),
-            'display_name': 'Production Container',
-            'description': 'Next.js Production Build'
-        }
-    }
+    # LEGACY: Wird noch für alte spawn_container() verwendet
+    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'user-template-01:latest')
+
+    # ========================================
+    # Dynamisches Template-Loading
+    # ========================================
+
+    @staticmethod
+    def _extract_type_from_image(image_name: str) -> str:
+        """
+        Extrahiert Container-Typ aus Image-Namen
+
+        Examples:
+            'user-template-01:latest' → 'template-01'
+            'user-template-next:latest' → 'template-next'
+            'custom-nginx:v1.0' → 'custom-nginx'
+        """
+        # Entferne Tag (:latest, :v1.0, etc.)
+        base_name = image_name.split(':')[0]
+
+        # Entferne 'user-' Prefix falls vorhanden
+        if base_name.startswith('user-'):
+            base_name = base_name[5:]  # 'user-template-01' → 'template-01'
+
+        return base_name
+
+    @staticmethod
+    def _load_template_images() -> list:
+        """Lädt Template-Image-Liste aus USER_TEMPLATE_IMAGES (semikolon-getrennt)"""
+        raw_images = os.getenv('USER_TEMPLATE_IMAGES', '')
+        if not raw_images:
+            # Fallback für Kompatibilität
+            return ['user-template-01:latest']
+
+        return [img.strip() for img in raw_images.split(';') if img.strip()]
+
+    @staticmethod
+    def _load_templates_config() -> dict:
+        """Lädt Template-Konfiguration aus templates.json"""
+        config_path = Path(__file__).parent / 'templates.json'
+
+        if not config_path.exists():
+            return {}
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Konvertiere Array zu Dictionary (key=type)
+            return {
+                template['type']: template
+                for template in data.get('templates', [])
+            }
+        except (json.JSONDecodeError, KeyError) as e:
+            import sys
+            print(f"[CONFIG] Warnung: Fehler beim Laden von templates.json: {e}", file=sys.stderr)
+            return {}
+
+    @staticmethod
+    def _build_container_templates() -> dict:
+        """
+        Baut CONTAINER_TEMPLATES Dictionary aus:
+        1. TEMPLATE_IMAGES (Liste der verfügbaren Images)
+        2. TEMPLATES_CONFIG (Metadaten aus templates.json)
+        """
+        templates = {}
+
+        for image in Config.TEMPLATE_IMAGES:
+            # Extrahiere Typ aus Image-Namen
+            container_type = Config._extract_type_from_image(image)
+
+            # Hole Metadaten aus JSON (falls vorhanden)
+            config = Config.TEMPLATES_CONFIG.get(container_type, {})
+
+            # Verwende JSON-Metadaten oder Fallback
+            templates[container_type] = {
+                'image': image,
+                'display_name': config.get('display_name', container_type.replace('-', ' ').title()),
+                'description': config.get('description', f'Container basierend auf {image}')
+            }
+
+        return templates
+
+    # Dynamisches Template-Loading initialisieren
+    TEMPLATE_IMAGES = _load_template_images.__func__()
+    TEMPLATES_CONFIG = _load_templates_config.__func__()
+    CONTAINER_TEMPLATES = _build_container_templates.__func__()
     
     # ========================================
     # Traefik/Domain-Konfiguration

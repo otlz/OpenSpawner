@@ -375,81 +375,75 @@ fi
 # 7. Docker-Images bauen
 # ============================================================
 echo ""
-echo "Baue Docker-Images fuer Multi-Container MVP..."
-echo "  - user-service-template (Development)"
-echo "  - user-template-next (Production)"
-echo "  - spawner-api (Backend)"
-echo "  - spawner-frontend (Frontend)"
+echo "Baue Docker-Images (Dynamisches Template-System)..."
 echo ""
 
 # Stoppe laufende Container
 ${COMPOSE_CMD} down 2>/dev/null || true
 
-# Zaehle aktive Builds fuer Fortschrittsanzeige
+# Zähle Templates für Fortschrittsanzeige
+TEMPLATE_DIRS=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
+TOTAL_BUILDS=$((2 + TEMPLATE_DIRS))  # spawner-api + frontend + templates
 BUILD_STEP=1
-TOTAL_BUILDS=3  # user-service-template + spawner-api + frontend
 
-# Multi-Container Support: Baue auch user-template-next wenn Verzeichnis existiert
-[ -d "${INSTALL_DIR}/user-template-next" ] && TOTAL_BUILDS=$((TOTAL_BUILDS + 1))
+# Auto-detect und baue alle user-template-* Verzeichnisse
+echo "  Auto-Detecting Template-Verzeichnisse..."
+BUILT_TEMPLATES=0
 
-# User-Template Image bauen (fuer User-Container)
-if [ -d "${INSTALL_DIR}/user-template" ]; then
-    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-service-template (User-Container)..."
+for template_dir in "${INSTALL_DIR}"/user-template*; do
+    # Prüfe ob Verzeichnis existiert
+    [ -d "$template_dir" ] || continue
+
+    # Extrahiere Template-Namen (z.B. user-template-01)
+    template_name=$(basename "$template_dir")
+
+    # Image-Name = Verzeichnis-Name + :latest
+    image_name="${template_name}:latest"
+
+    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue ${template_name}..."
+
+    # Special handling für Next.js Templates (längere Build-Zeit)
+    if [[ "$template_name" == *"next"* ]]; then
+        echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
+    fi
+
     echo ""
 
-    # Build ausfuehren und Output in Datei speichern
     BUILD_LOG="${LOG_FILE}"
     echo "" >> "${LOG_FILE}"
-    echo "=== Build: user-service-template ===" >> "${LOG_FILE}"
-    docker build --no-cache -t user-service-template:latest "${INSTALL_DIR}/user-template/" >> "${BUILD_LOG}" 2>&1
+    echo "=== Build: ${template_name} ===" >> "${LOG_FILE}"
+
+    docker build --no-cache -t "${image_name}" "${template_dir}/" >> "${BUILD_LOG}" 2>&1
     BUILD_EXIT=$?
 
     # Gefilterten Output anzeigen
     grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
 
     # Pruefe ob Build erfolgreich UND Image existiert
-    if [ $BUILD_EXIT -eq 0 ] && docker image inspect user-service-template:latest >/dev/null 2>&1; then
+    if [ $BUILD_EXIT -eq 0 ] && docker image inspect "${image_name}" >/dev/null 2>&1; then
         echo ""
-        echo -e "  user-service-template: ${GREEN}OK${NC}"
+        echo -e "  ${template_name}: ${GREEN}OK${NC}"
+        BUILT_TEMPLATES=$((BUILT_TEMPLATES + 1))
     else
         echo ""
-        echo -e "  user-service-template: ${RED}FEHLER${NC}"
+        echo -e "  ${template_name}: ${RED}FEHLER${NC}"
         echo "  Siehe Build-Log: ${LOG_FILE}"
         echo "  Letzte 50 Zeilen:"
         tail -50 "${BUILD_LOG}"
         exit 1
     fi
+
     BUILD_STEP=$((BUILD_STEP + 1))
+done
+
+if [ $BUILT_TEMPLATES -eq 0 ]; then
+    echo -e "${RED}FEHLER: Keine Template-Verzeichnisse gefunden!${NC}"
+    echo "Erwartete Verzeichnisse: user-template*, z.B. user-template-01, user-template-next"
+    exit 1
 fi
 
-# User-Template-Next Image bauen (Production Template fuer Multi-Container MVP)
-# Wird automatisch gebaut wenn Verzeichnis existiert
-if [ -d "${INSTALL_DIR}/user-template-next" ]; then
-    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue user-template-next (Next.js Template - Production)..."
-    echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
-    echo ""
-
-    BUILD_LOG="${LOG_FILE}"
-    echo "" >> "${LOG_FILE}"
-    echo "=== Build: user-template-next ===" >> "${LOG_FILE}"
-    docker build --no-cache -t user-template-next:latest "${INSTALL_DIR}/user-template-next/" >> "${BUILD_LOG}" 2>&1
-    BUILD_EXIT=$?
-
-    grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
-
-    if [ $BUILD_EXIT -eq 0 ] && docker image inspect user-template-next:latest >/dev/null 2>&1; then
-        echo ""
-        echo -e "  user-template-next: ${GREEN}OK${NC}"
-    else
-        echo ""
-        echo -e "  user-template-next: ${RED}FEHLER${NC}"
-        echo "  Siehe Build-Log: ${LOG_FILE}"
-        echo "  Letzte 50 Zeilen:"
-        tail -50 "${BUILD_LOG}"
-        exit 1
-    fi
-    BUILD_STEP=$((BUILD_STEP + 1))
-fi
+echo ""
+echo -e "${GREEN}Alle ${BUILT_TEMPLATES} Template(s) erfolgreich gebaut.${NC}"
 
 # Spawner Backend Image bauen
 echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Spawner API (Flask Backend)..."

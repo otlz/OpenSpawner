@@ -1,0 +1,22 @@
+{
+  "templates": [
+    {
+      "type": "template-01",
+      "image": "user-template-01:latest",
+      "display_name": "Nginx Basic",
+      "description": "Einfacher Nginx-Server mit statischen Dateien und Willkommensseite"
+    },
+    {
+      "type": "template-02",
+      "image": "user-template-02:latest",
+      "display_name": "Nginx Advanced",
+      "description": "Nginx mit erweiterten Features und Konfigurationen"
+    },
+    {
+      "type": "template-next",
+      "image": "user-template-next:latest",
+      "display_name": "Next.js Production",
+      "description": "React-Anwendung mit Shadcn/UI, TypeScript und modernem Build-Setup"
+    }
+  ]
+}
