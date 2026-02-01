@@ -101,7 +101,41 @@ def api_signup():
     # Prüfe ob Email bereits registriert
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
-        return jsonify({'error': 'Diese Email-Adresse ist bereits registriert'}), 409
+        # Statt Fehler: Sende Login-Link (bessere UX, verhindert User-Enumeration)
+        if existing_user.is_blocked:
+            return jsonify({'error': 'Dein Account wurde gesperrt'}), 403
+
+        # Rate-Limiting prüfen
+        if not check_rate_limit(email):
+            return jsonify({'error': 'Zu viele Anfragen. Bitte versuche es später erneut.'}), 429
+
+        # Generiere Magic Link Token für Login
+        token = generate_magic_link_token()
+        expires_at = datetime.utcnow() + timedelta(seconds=Config.MAGIC_LINK_TOKEN_EXPIRY)
+
+        magic_token = MagicLinkToken(
+            user_id=existing_user.id,
+            token=token,
+            token_type='login',
+            expires_at=expires_at,
+            ip_address=request.remote_addr
+        )
+        db.session.add(magic_token)
+        db.session.commit()
+
+        # Sende Email
+        try:
+            send_magic_link_email(email, token, 'login')
+        except Exception as e:
+            current_app.logger.error(f"Email-Versand fehlgeschlagen: {str(e)}")
+            return jsonify({'error': 'Email konnte nicht gesendet werden'}), 500
+
+        current_app.logger.info(f"[SIGNUP] Email {email} existiert bereits - Login-Link gesendet")
+
+        # Gleiche Nachricht wie bei Neuregistrierung (verhindert User-Enumeration)
+        return jsonify({
+            'message': 'Registrierungs-Link wurde an deine Email gesendet. Bitte überprüfe dein Postfach.'
+        }), 200
 
     # Rate-Limiting
     if not check_rate_limit(email):
