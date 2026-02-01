@@ -40,6 +40,52 @@ class User(UserMixin, db.Model):
     # Multi-Container Support
     containers = db.relationship('UserContainer', back_populates='user', cascade='all, delete-orphan')
 
+    @property
+    def container_id(self):
+        """Backwards compatibility: gibt ID des Primary Containers zurück"""
+        if self.containers:
+            return self.containers[0].container_id
+        return None
+
+    @container_id.setter
+    def container_id(self, value):
+        """Backwards compatibility: setzt Primary Container ID"""
+        if not self.containers:
+            # Erstelle Primary Container wenn nicht vorhanden
+            from config import Config
+            primary = UserContainer(
+                user_id=self.id,
+                container_type='template-01',
+                template_image=Config.USER_TEMPLATE_IMAGE
+            )
+            db.session.add(primary)
+            db.session.flush()
+            self.containers.append(primary)
+        self.containers[0].container_id = value
+
+    @property
+    def container_port(self):
+        """Backwards compatibility: gibt Port des Primary Containers zurück"""
+        if self.containers:
+            return self.containers[0].container_port
+        return None
+
+    @container_port.setter
+    def container_port(self, value):
+        """Backwards compatibility: setzt Primary Container Port"""
+        if not self.containers:
+            # Erstelle Primary Container wenn nicht vorhanden
+            from config import Config
+            primary = UserContainer(
+                user_id=self.id,
+                container_type='template-01',
+                template_image=Config.USER_TEMPLATE_IMAGE
+            )
+            db.session.add(primary)
+            db.session.flush()
+            self.containers.append(primary)
+        self.containers[0].container_port = value
+
     def to_dict(self):
         """Konvertiert User zu Dictionary fuer API-Responses"""
         return {
