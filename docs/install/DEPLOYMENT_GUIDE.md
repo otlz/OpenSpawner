@@ -402,6 +402,305 @@ docker exec spawner sqlite3 /app/data/users.db \
 
 ---
 
+## ⚙️ Häufige Konfigurationsänderungen nach Deployment
+
+**WICHTIG:** Die `.env` Datei wird als **Volume in den Container gemountet**. Das bedeutet:
+- Änderungen in `.env` werden **zur Laufzeit** gelesen
+- Du brauchst **kein Docker-Rebuild** für Konfigurationsänderungen
+- Nur `docker-compose down` + `docker-compose up -d` reicht
+
+### SMTP/Email-Anmeldedaten ändern
+
+Falls du die Email-Anmeldedaten später ändern musst (z.B. Passwort aktualisiert):
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeilen:
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USER=deine-email@gmail.com
+# SMTP_PASSWORD=neues-passwort
+# SMTP_FROM=noreply@domain.com
+
+# 2. Stoppe Container komplett und starte neu
+docker-compose down
+docker-compose up -d spawner
+
+# 3. Überprüfe ob neue Credentials geladen wurden
+docker exec spawner cat /app/.env | grep SMTP_HOST
+```
+
+**Hinweis:** `docker-compose restart spawner` reicht auch aus (schneller), aber `down`/`up` ist sicherer.
+
+### Domain oder Base URL ändern
+
+Falls du die Domain oder Subdomain ändern möchtest:
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeilen:
+# BASE_DOMAIN=neudomain.com
+# SPAWNER_SUBDOMAIN=coder (oder etwas anderes)
+# FRONTEND_URL=https://coder.neudomain.com
+
+# 2. Starte Services neu
+docker-compose down
+docker-compose up -d spawner frontend
+
+# 3. Überprüfe Config (sollte neue Domain zeigen)
+docker exec spawner cat /app/.env | grep BASE_DOMAIN
+```
+
+### Magic Link Token Expiration ändern
+
+Standardmäßig haben Magic Links 15 Minuten Gültigkeitsdauer. Wenn du das ändern möchtest:
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeilen:
+# MAGIC_LINK_TOKEN_EXPIRY=900  (in Sekunden, default: 15 Min)
+# MAGIC_LINK_RATE_LIMIT=3      (max. 3 Links pro Stunde)
+
+# 2. Starte Backend neu
+docker-compose restart spawner
+# oder sicherer:
+# docker-compose down
+# docker-compose up -d spawner
+```
+
+### JWT Token Expiration ändern
+
+Standardmäßig verfallen JWT Tokens nach 1 Stunde:
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeile:
+# JWT_ACCESS_TOKEN_EXPIRES=3600  (in Sekunden)
+
+# 2. Starte Backend neu
+docker-compose restart spawner
+```
+
+### Container-Resource-Limits ändern
+
+Wenn deine Server-Hardware unterschiedlich ist, passe die Limits an:
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeilen:
+# DEFAULT_MEMORY_LIMIT=512m     (RAM pro Container)
+# DEFAULT_CPU_QUOTA=50000       (CPU: 50000 = 0.5 CPU, 100000 = 1 CPU)
+
+# 2. Starte Backend neu
+docker-compose restart spawner
+
+# Info: Neue Container verwenden sofort die neuen Limits
+# Laufende Container behalten alte Limits (bis Neustart)
+```
+
+### Logging Level ändern
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# Ändere diese Zeile:
+# LOG_LEVEL=INFO  (Options: DEBUG, INFO, WARNING, ERROR)
+
+# 2. Starte Backend neu
+docker-compose restart spawner
+```
+
+### Überprüfe welche Werte der Container tatsächlich nutzt
+
+Falls du unsicher bist, ob die neuen Konfigurationswerte geladen wurden:
+
+```bash
+# Zeige die .env Werte, die der Container sieht
+docker exec spawner cat /app/.env | grep SMTP
+
+# Alle SMTP-Einstellungen anzeigen:
+docker exec spawner cat /app/.env | grep SMTP
+
+# Überprüfe mit Python, ob die Werte korrekt geladen sind:
+docker exec spawner python3 << 'EOF'
+from config import Config
+print(f"SMTP_HOST: {Config.SMTP_HOST}")
+print(f"SMTP_USER: {Config.SMTP_USER}")
+print(f"SMTP_PORT: {Config.SMTP_PORT}")
+EOF
+```
+
+**Wichtig:**
+- `cat /app/.env | grep SMTP` zeigt die **aktuellen** Werte aus der `.env` Datei
+- `docker exec spawner env` zeigt Shell-Variablen, nicht Python-Variablen!
+- Python lädt die Werte mit `load_dotenv()` - überprüfe mit Python-Code ob sie korrekt geladen sind
+
+---
+
+## 🐛 Debug-API für Administratoren
+
+**Neue Feature:** Admin-API zum Debuggen und Bereinigen von Logs und Datenbanken
+
+### Vorbereitung: DEBUG_TOKEN generieren
+
+```bash
+# 1. Token generieren
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Beispiel-Output:
+# a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
+
+# 2. In .env eintragen
+nano .env
+# DEBUG_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
+
+# 3. Backend neustarten
+docker-compose restart spawner
+```
+
+### Debug-API Endpoints
+
+**Base:** `/api/admin/debug`
+
+**Authentifizierung via Header:**
+```bash
+curl -H "X-Debug-Token: your-token-here" "http://localhost:5000/api/admin/debug?action=..."
+```
+
+Oder mit **Admin JWT Token:**
+```bash
+curl -H "Authorization: Bearer your-jwt-token" "http://localhost:5000/api/admin/debug?action=..."
+```
+
+### Verfügbare Actions
+
+#### 1. Logs anzeigen (view-logs)
+
+```bash
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=view-logs"
+```
+
+Zeigt die **letzten 100 Zeilen** der Logs mit Zeilenanzahl.
+
+#### 2. Logs löschen (clear-logs)
+
+```bash
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=clear-logs"
+```
+
+Löscht **alle Logs** komplett. Danach ist die Log-Datei leer.
+
+#### 3. User entfernen (delete-email)
+
+```bash
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=delete-email&email=test@example.com"
+```
+
+Entfernt einen **User komplett** aus der Datenbank:
+- User-Profil gelöscht
+- Container gelöscht (falls existiert)
+- Alle Token gelöscht
+- Alle Datenbank-Einträge entfernt
+
+**WARNUNG:** Das ist **nicht rückgängig zu machen**!
+
+#### 4. Magic Link Tokens entfernen (delete-token)
+
+```bash
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=delete-token&email=test@example.com"
+```
+
+Löscht **nur die Magic Link Tokens** für eine Email. Der User bleibt bestehen!
+
+Nützlich wenn:
+- Rate-Limiting blockiert den User
+- Tokens sind fehlerhaft
+- User neue Tokens anfordern soll
+
+#### 5. Hilfe anzeigen (info)
+
+```bash
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=info"
+```
+
+Zeigt alle verfügbaren Actions und Beispiele.
+
+### Praktische Beispiele
+
+**Problem: User kann sich nicht anmelden (Rate Limit)**
+
+```bash
+# 1. Lösche alle Tokens für diese Email
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=delete-token&email=user@example.com"
+
+# 2. User kann jetzt neu anfragen
+```
+
+**Problem: Alte Test-User in der Datenbank**
+
+```bash
+# Lösche kompletten User
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=delete-email&email=test@example.com"
+```
+
+**Problem: Logs sind zu groß**
+
+```bash
+# Lösche alle Logs
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=clear-logs"
+```
+
+**Problem: Brauche die letzten Fehler zum Debuggen**
+
+```bash
+# Hole letzten 100 Zeilen
+curl -H "X-Debug-Token: xxx" \
+  "http://localhost:5000/api/admin/debug?action=view-logs"
+```
+
+### Bash-Alias für schnellen Zugriff
+
+Füge dies in `~/.bashrc` ein für schnellere Befehle:
+
+```bash
+export SPAWNER_DEBUG_TOKEN="dein-token-hier"
+export SPAWNER_URL="http://localhost:5000"
+
+alias spawner-logs="curl -H 'X-Debug-Token: $SPAWNER_DEBUG_TOKEN' '$SPAWNER_URL/api/admin/debug?action=view-logs'"
+alias spawner-clear-logs="curl -H 'X-Debug-Token: $SPAWNER_DEBUG_TOKEN' '$SPAWNER_URL/api/admin/debug?action=clear-logs'"
+alias spawner-delete-email="curl -H 'X-Debug-Token: $SPAWNER_DEBUG_TOKEN' '$SPAWNER_URL/api/admin/debug?action=delete-email&email="
+```
+
+Dann:
+```bash
+# Logs anzeigen
+spawner-logs
+
+# User löschen
+spawner-delete-email=test@example.com"
+```
+
+---
+
 ## 🔐 Security Checklist
 
 - [ ] SECRET_KEY ist generiert und komplex

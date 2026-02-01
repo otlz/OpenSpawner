@@ -99,35 +99,10 @@ class Config:
             print(f"[CONFIG] Warnung: Fehler beim Laden von templates.json: {e}", file=sys.stderr)
             return {}
 
-    @staticmethod
-    def _build_container_templates() -> dict:
-        """
-        Baut CONTAINER_TEMPLATES Dictionary aus:
-        1. TEMPLATE_IMAGES (Liste der verfügbaren Images)
-        2. TEMPLATES_CONFIG (Metadaten aus templates.json)
-        """
-        templates = {}
-
-        for image in Config.TEMPLATE_IMAGES:
-            # Extrahiere Typ aus Image-Namen
-            container_type = Config._extract_type_from_image(image)
-
-            # Hole Metadaten aus JSON (falls vorhanden)
-            config = Config.TEMPLATES_CONFIG.get(container_type, {})
-
-            # Verwende JSON-Metadaten oder Fallback
-            templates[container_type] = {
-                'image': image,
-                'display_name': config.get('display_name', container_type.replace('-', ' ').title()),
-                'description': config.get('description', f'Container basierend auf {image}')
-            }
-
-        return templates
-
-    # Dynamisches Template-Loading initialisieren
-    TEMPLATE_IMAGES = _load_template_images.__func__()
-    TEMPLATES_CONFIG = _load_templates_config.__func__()
-    CONTAINER_TEMPLATES = _build_container_templates.__func__()
+    # Temp-Variablen für Template-Loading (werden nach Klasse verarbeitet)
+    TEMPLATE_IMAGES = None
+    TEMPLATES_CONFIG = None
+    CONTAINER_TEMPLATES = None
     
     # ========================================
     # Traefik/Domain-Konfiguration
@@ -186,6 +161,11 @@ class Config:
     MAGIC_LINK_TOKEN_EXPIRY = int(os.getenv('MAGIC_LINK_TOKEN_EXPIRY', 900))  # 15 Minuten
     MAGIC_LINK_RATE_LIMIT = int(os.getenv('MAGIC_LINK_RATE_LIMIT', 3))  # Max 3 pro Stunde
 
+    # ========================================
+    # Debug & Administration
+    # ========================================
+    DEBUG_TOKEN = os.getenv('DEBUG_TOKEN', '')  # Für Admin-Debug-API
+
 
 class DevelopmentConfig(Config):
     """Konfiguration für Entwicklung"""
@@ -213,6 +193,23 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+
+
+# Initialisiere Templates NACH Klassendefini tion
+Config.TEMPLATE_IMAGES = Config._load_template_images()
+Config.TEMPLATES_CONFIG = Config._load_templates_config()
+
+# Baue CONTAINER_TEMPLATES aus Templates
+templates = {}
+for image in Config.TEMPLATE_IMAGES:
+    container_type = Config._extract_type_from_image(image)
+    config_meta = Config.TEMPLATES_CONFIG.get(container_type, {})
+    templates[container_type] = {
+        'image': image,
+        'display_name': config_meta.get('display_name', container_type.replace('-', ' ').title()),
+        'description': config_meta.get('description', f'Container basierend auf {image}')
+    }
+Config.CONTAINER_TEMPLATES = templates
 
 
 # Config-Dict für einfaches Laden

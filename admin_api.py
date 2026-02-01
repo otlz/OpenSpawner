@@ -322,3 +322,164 @@ def get_active_takeovers():
         'sessions': sessions_list,
         'total': len(sessions_list)
     }), 200
+
+
+@admin_bp.route('/debug', methods=['GET', 'POST'])
+def debug_management():
+    """
+    Debug-Management Endpoint für Logs und Datenbank-Bereinigung
+
+    Authentifizierung via:
+    1. DEBUG_TOKEN Header: X-Debug-Token: <token>
+    2. Oder Admin JWT Token
+
+    Actions:
+    - view-logs: Zeigt letzte 100 Zeilen der Logs
+    - clear-logs: Löscht alle Logs
+    - delete-email: Entfernt User und alle zugehörigen Daten
+      Parameter: ?email=test@example.com
+    - delete-token: Entfernt Magic Link Tokens für Email
+      Parameter: ?email=test@example.com
+    """
+    # Authentifizierung prüfen
+    debug_token = current_app.config.get('DEBUG_TOKEN')
+    provided_token = request.headers.get('X-Debug-Token')
+
+    # Versuch JWT-Auth
+    is_admin = False
+    try:
+        from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+        verify_jwt_in_request(optional=True)
+        user_id = get_jwt_identity()
+        if user_id:
+            user = User.query.get(int(user_id))
+            is_admin = user and user.is_admin
+    except:
+        pass
+
+    # Authentifizierung validieren
+    if not (is_admin or (debug_token and provided_token == debug_token)):
+        return jsonify({'error': 'Authentifizierung erforderlich (JWT oder X-Debug-Token Header)'}), 403
+
+    action = request.args.get('action', '').lower()
+
+    # ===== view-logs =====
+    if action == 'view-logs':
+        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                last_100 = lines[-100:] if len(lines) > 100 else lines
+            return jsonify({
+                'action': 'view-logs',
+                'lines': len(lines),
+                'last_100': ''.join(last_100)
+            }), 200
+        except FileNotFoundError:
+            return jsonify({'error': 'Log-Datei nicht gefunden'}), 404
+        except Exception as e:
+            return jsonify({'error': f'Fehler beim Lesen der Logs: {str(e)}'}), 500
+
+    # ===== clear-logs =====
+    elif action == 'clear-logs':
+        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
+        try:
+            with open(log_file, 'w') as f:
+                f.write('')
+            current_app.logger.info('[DEBUG] Logs wurden gelöscht')
+            return jsonify({
+                'action': 'clear-logs',
+                'message': 'Logs wurden gelöscht'
+            }), 200
+        except Exception as e:
+            return jsonify({'error': f'Fehler beim Löschen der Logs: {str(e)}'}), 500
+
+    # ===== delete-email =====
+    elif action == 'delete-email':
+        email = request.args.get('email', '').strip()
+        if not email:
+            return jsonify({'error': 'Parameter erforderlich: email'}), 400
+
+        try:
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                return jsonify({'error': f'User {email} nicht gefunden'}), 404
+
+            user_id = user.id
+            email_deleted = user.email
+
+            # Container löschen falls vorhanden
+            if user.container_id:
+                try:
+                    container_mgr = ContainerManager()
+                    container_mgr.stop_container(user.container_id)
+                    container_mgr.remove_container(user.container_id)
+                except:
+                    pass
+
+            # User und alle zugehörigen Daten löschen
+            db.session.delete(user)
+            db.session.commit()
+
+            current_app.logger.info(f'[DEBUG] User {email_deleted} wurde gelöscht')
+
+            return jsonify({
+                'action': 'delete-email',
+                'message': f'User {email_deleted} wurde gelöscht',
+                'user_id': user_id
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+
+    # ===== delete-token =====
+    elif action == 'delete-token':
+        email = request.args.get('email', '').strip()
+        if not email:
+            return jsonify({'error': 'Parameter erforderlich: email'}), 400
+
+        try:
+            from models import MagicLinkToken
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                return jsonify({'error': f'User {email} nicht gefunden'}), 404
+
+            tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
+            count = len(tokens)
+
+            for token in tokens:
+                db.session.delete(token)
+            db.session.commit()
+
+            current_app.logger.info(f'[DEBUG] {count} Magic Link Tokens für {email} wurden gelöscht')
+
+            return jsonify({
+                'action': 'delete-token',
+                'message': f'{count} Tokens für {email} gelöscht',
+                'tokens_deleted': count
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+
+    # ===== info =====
+    elif action == 'info' or not action:
+        return jsonify({
+            'endpoint': '/api/admin/debug',
+            'auth': 'X-Debug-Token Header oder Admin JWT',
+            'actions': {
+                'view-logs': 'Zeigt letzte 100 Zeilen der Logs',
+                'clear-logs': 'Löscht alle Logs',
+                'delete-email': 'Löscht User (Parameter: email=...)',
+                'delete-token': 'Löscht Magic Link Tokens (Parameter: email=...)',
+                'info': 'Diese Hilfe'
+            },
+            'examples': [
+                'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
+                'GET /api/admin/debug?action=delete-email&email=test@example.com',
+                'GET /api/admin/debug?action=delete-token&email=test@example.com'
+            ]
+        }), 200
+
+    else:
+        return jsonify({'error': f'Unbekannte Action: {action}'}), 400
