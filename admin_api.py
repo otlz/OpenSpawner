@@ -465,6 +465,28 @@ def debug_management():
             db.session.rollback()
             return jsonify({'error': f'Fehler: {str(e)}'}), 500
 
+    # ===== list-users =====
+    elif action == 'list-users':
+        users = User.query.all()
+        users_list = []
+        for user in users:
+            users_list.append({
+                'id': user.id,
+                'email': user.email,
+                'slug': user.slug,
+                'state': user.state,
+                'is_admin': user.is_admin,
+                'is_blocked': user.is_blocked,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_used': user.last_used.isoformat() if user.last_used else None
+            })
+
+        return jsonify({
+            'action': 'list-users',
+            'users': users_list,
+            'total': len(users_list)
+        }), 200
+
     # ===== info =====
     elif action == 'info' or not action:
         return jsonify({
@@ -473,12 +495,14 @@ def debug_management():
             'actions': {
                 'view-logs': 'Zeigt letzte 100 Zeilen der Logs',
                 'clear-logs': 'Löscht alle Logs',
+                'list-users': 'Listet alle registrierten User auf',
                 'delete-email': 'Löscht User (Parameter: email=...)',
                 'delete-token': 'Löscht Magic Link Tokens (Parameter: email=...)',
                 'info': 'Diese Hilfe'
             },
             'examples': [
                 'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
+                'GET /api/admin/debug?action=list-users -H "X-Debug-Token: xxx"',
                 'GET /api/admin/debug?action=delete-email&email=test@example.com',
                 'GET /api/admin/debug?action=delete-token&email=test@example.com'
             ]
