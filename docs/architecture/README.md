@@ -1,11 +1,92 @@
 ---
 tags: SPAWNER unter Docker
 ---
+<style>
+  .header-table {
+    width: 100%; 
+    color: #000000;
+    background-color: #ffffff;
+    box-sizing: border-box; 
+    #padding-left: 1.5cm;   
+    #padding-right: 1.5cm;  
+    font-size: 10px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .logo-cell {
+    width: 15%; /* Breite für die Logo-Zelle anpassen */
+    text-align: center;
+    padding-top: 1px !important; /* Abstand von oben anpassen */
+    padding-bottom: 1px !important; /* Abstand von unten anpassen */
+    vertical-align: middle;
+  }
+
+  .title-cell {
+    width: 30%; /* Breite für die Titel-Zelle anpassen */
+    text-align: center;
+    font-size: 15px;
+    font-weight: bold;
+    padding-top: 0px; /* Abstand von oben anpassen */
+    padding-bottom: 0px; /* Abstand von unten anpassen */
+  }
+  .qr-cell {
+    width: 8%; /* Breite für die Logo-Zelle anpassen */
+    text-align: center;
+    #padding-top: 1px !important; /* Abstand von oben anpassen */
+    #padding-top: 1px !important; /* Abstand von oben anpassen */
+    #padding-left: 1px !important; /* Abstand von links anpassen */
+    #padding-right: 1px !important; /* Abstand von rechts anpassen */
+  }
+  .txt-cell {
+    width: 10%; /* Breite für die Logo-Zelle anpassen */
+    text-align: right;
+    padding-top: 0.1px; /* Abstand von oben anpassen */
+    padding-bottom: 0.1px; /* Abstand von unten anpassen */
+  }
+
+  @media print {
+  .TOC {
+    display: none;
+  }
+      
+  @media print {
+  .toc {
+    display: none;
+  }
+</style>
+
+
+<table class="header-table">
+  <tr>
+    <td class="logo-cell" rowspan="2">
+      <img src="https://hedgedoc.wieland.org/uploads/7aaace93-f7d9-4fe9-9553-94b2fa2e7031.png" />
+    </td>
+    <td class="title-cell" rowspan="3">
+        <a target = "self" href="https://hedgedoc.wieland.org/s/2l75Vqw4la">SPAWNER<br>- Inatallation -</h5></a>
+    </td>
+    <td class="txt-cell" rowspan="1">
+    <b>FIUO</b>
+    </td>
+    <td class="qr-cell" rowspan="3">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=https://hedgedoc.wieland.org/s/2l75Vqw4la">
+    </td>
+  </tr>
+  <tr>
+    <td class="txt-cell" rowspan="2">
+      Rainer Wieland
+    </td>
+  </tr>
+  <tr>
+    <td>
+      26.01.2026 V01 rwd
+    </td>
+  </tr>
+</table>
 
 # DAS SPAWNER-PROJEKT V0.1
-*27.01.2026 rwd*
-![](https://hedgedoc.wieland.org/uploads/7aaace93-f7d9-4fe9-9553-94b2fa2e7031.png)
 
+*27.01.2026 rwd*
 
 ---
 
