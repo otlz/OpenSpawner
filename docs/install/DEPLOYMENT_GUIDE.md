@@ -5,7 +5,7 @@
 Das System unterstützt **beliebig viele User-Templates** über ein dynamisches Konfigurationssystem:
 - Templates werden in `.env` definiert (semikolon-getrennt)
 - Metadaten (Namen, Beschreibungen) kommen aus `templates.json`
-- `install.sh` baut automatisch alle `user-template-*` Verzeichnisse
+- `install.sh` baut **nur** die in `.env` unter `USER_TEMPLATE_IMAGES` definierten Templates
 - Jeder Benutzer kann beliebig viele Container verschiedener Typen erstellen
 
 **Standardtemplates (können beliebig erweitert werden):**
@@ -45,22 +45,22 @@ rm -f spawner.db
 rm -rf logs/*
 ```
 
-#### 1.3 Templates werden automatisch gebaut!
+#### 1.3 Templates konfigurieren (ZUERST!)
 ```bash
-# install.sh erkennt AUTOMATISCH alle user-template-* Verzeichnisse und baut sie:
-# - user-template-01/
-# - user-template-02/
-# - user-template-next/
-# etc.
-
 # Überprüfung der verfügbaren Template-Verzeichnisse:
 ls -d user-template*
 
 # Expected output:
 # user-template-01  user-template-02  user-template-next
+
+# WICHTIG: .env MUSS zuerst konfiguriert werden!
+# install.sh baut NUR die in USER_TEMPLATE_IMAGES definierten Templates
 ```
 
-**WICHTIG:** Das `install.sh`-Script baut automatisch alle Templates - **keine manuellen Docker-Builds nötig**!
+**WICHTIG:**
+- Das `install.sh`-Script baut **nur** die in `.env` → `USER_TEMPLATE_IMAGES` definierten Templates
+- **Ohne `.env`-Eintrag werden Templates NICHT gebaut!**
+- Daher: `.env` konfigurieren BEVOR `install.sh` ausführen!
 
 #### 1.4 Environment konfigurieren
 ```bash
