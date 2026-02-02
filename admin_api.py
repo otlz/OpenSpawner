@@ -374,18 +374,67 @@ def get_active_takeovers():
 def debug_management():
     """
     Debug-Management Endpoint für Logs und Datenbank-Bereinigung
-
-    Authentifizierung via:
-    1. DEBUG_TOKEN Header: X-Debug-Token: <token>
-    2. Oder Admin JWT Token
-
-    Actions:
-    - view-logs: Zeigt letzte 100 Zeilen der Logs
-    - clear-logs: Löscht alle Logs
-    - delete-email: Entfernt User und alle zugehörigen Daten
-      Parameter: ?email=test@example.com
-    - delete-token: Entfernt Magic Link Tokens für Email
-      Parameter: ?email=test@example.com
+    ---
+    tags:
+      - Debug
+    parameters:
+      - name: action
+        in: query
+        type: string
+        required: true
+        enum:
+          - view-logs
+          - clear-logs
+          - list-users
+          - delete-email
+          - delete-token
+          - info
+        description: Welche Aktion soll ausgeführt werden?
+      - name: email
+        in: query
+        type: string
+        required: false
+        description: Email-Adresse des Users (erforderlich für delete-email und delete-token)
+      - name: X-Debug-Token
+        in: header
+        type: string
+        required: false
+        description: Debug-Token alternativ zu JWT-Authentication
+    security:
+      - jwt: []
+      - debug_token: []
+    responses:
+      200:
+        description: Erfolgreich ausgeführt
+        schema:
+          type: object
+          properties:
+            action:
+              type: string
+              description: Die ausgeführte Aktion
+            message:
+              type: string
+              description: Rückmeldung
+            logs:
+              type: string
+              description: Log-Inhalte (nur bei view-logs)
+            users:
+              type: array
+              description: Liste der User (nur bei list-users)
+            tokens_deleted:
+              type: integer
+              description: Anzahl gelöschter Tokens
+      400:
+        description: Ungültige Parameter
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+      403:
+        description: Authentifizierung erforderlich
+      404:
+        description: User oder Ressource nicht gefunden
     """
     # Authentifizierung prüfen
     debug_token = current_app.config.get('DEBUG_TOKEN')

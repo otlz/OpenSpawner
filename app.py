@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, url_for, jsonify
 from flask_login import LoginManager, login_required, current_user
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from flasgger import Swagger
 from sqlalchemy import text
 from models import db, User, AdminTakeoverSession
 from auth import auth_bp
@@ -32,6 +33,30 @@ CORS(app, resources={
 
 # JWT initialisieren
 jwt = JWTManager(app)
+
+# Swagger/OpenAPI initialisieren
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": 'openapi',
+            "route": '/openapi.json',
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True,
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/swagger",
+    "title": "Container Spawner API",
+    "description": "API für Container-Spawner mit Admin-Debug-Endpoints",
+    "version": "2.0.0",
+    "termsOfService": "",
+    "contact": {
+        "name": "API Support"
+    }
+}
+swagger = Swagger(app, config=swagger_config)
 
 @jwt.token_in_blocklist_loader
 def check_if_token_in_blocklist(jwt_header, jwt_payload):
