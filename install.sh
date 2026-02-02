@@ -381,69 +381,197 @@ echo ""
 # Stoppe laufende Container
 ${COMPOSE_CMD} down 2>/dev/null || true
 
-# Zähle Templates für Fortschrittsanzeige
-TEMPLATE_DIRS=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
-TOTAL_BUILDS=$((2 + TEMPLATE_DIRS))  # spawner-api + frontend + templates
-BUILD_STEP=1
+# Lese USER_TEMPLATE_IMAGES aus .env
+USER_TEMPLATE_IMAGES=""
+if [ -f "${INSTALL_DIR}/.env" ]; then
+    # Extrahiere USER_TEMPLATE_IMAGES (mit oder ohne Quotes)
+    USER_TEMPLATE_IMAGES=$(grep "^USER_TEMPLATE_IMAGES=" "${INSTALL_DIR}/.env" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+fi
 
-# Auto-detect und baue alle user-template-* Verzeichnisse
-echo "  Auto-Detecting Template-Verzeichnisse..."
-BUILT_TEMPLATES=0
+# Fallback auf .env.example wenn .env nicht existiert
+if [ -z "$USER_TEMPLATE_IMAGES" ] && [ -f "${INSTALL_DIR}/.env.example" ]; then
+    echo -e "${YELLOW}⚠️  .env nicht gefunden oder USER_TEMPLATE_IMAGES nicht definiert${NC}"
+    echo "  Nutze .env.example als Fallback..."
+    USER_TEMPLATE_IMAGES=$(grep "^USER_TEMPLATE_IMAGES=" "${INSTALL_DIR}/.env.example" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+fi
 
-for template_dir in "${INSTALL_DIR}"/user-template*; do
-    # Prüfe ob Verzeichnis existiert
-    [ -d "$template_dir" ] || continue
-
-    # Extrahiere Template-Namen (z.B. user-template-01)
-    template_name=$(basename "$template_dir")
-
-    # Image-Name = Verzeichnis-Name + :latest
-    image_name="${template_name}:latest"
-
-    echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue ${template_name}..."
-
-    # Special handling für Next.js Templates (längere Build-Zeit)
-    if [[ "$template_name" == *"next"* ]]; then
-        echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
-    fi
-
+# Fallback: Wenn noch immer leer, baue alle Templates (rückwärtskompatibel)
+if [ -z "$USER_TEMPLATE_IMAGES" ]; then
+    echo -e "${YELLOW}⚠️  USER_TEMPLATE_IMAGES nicht konfiguriert${NC}"
+    echo "  Fallback: Baue alle user-template-* Verzeichnisse (alte Logik)..."
     echo ""
 
-    BUILD_LOG="${LOG_FILE}"
-    echo "" >> "${LOG_FILE}"
-    echo "=== Build: ${template_name} ===" >> "${LOG_FILE}"
+    BUILT_TEMPLATES=0
+    TEMPLATE_DIRS=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
+    TOTAL_BUILDS=$((2 + TEMPLATE_DIRS))
+    BUILD_STEP=$((BUILD_STEP + 1))
 
-    docker build --no-cache -t "${image_name}" "${template_dir}/" >> "${BUILD_LOG}" 2>&1
-    BUILD_EXIT=$?
+    for template_dir in "${INSTALL_DIR}"/user-template*; do
+        [ -d "$template_dir" ] || continue
+        template_name=$(basename "$template_dir")
+        image_name="${template_name}:latest"
 
-    # Gefilterten Output anzeigen
-    grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+        echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue ${template_name}..."
 
-    # Pruefe ob Build erfolgreich UND Image existiert
-    if [ $BUILD_EXIT -eq 0 ] && docker image inspect "${image_name}" >/dev/null 2>&1; then
+        if [[ "$template_name" == *"next"* ]]; then
+            echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
+        fi
+
         echo ""
-        echo -e "  ${template_name}: ${GREEN}OK${NC}"
-        BUILT_TEMPLATES=$((BUILT_TEMPLATES + 1))
-    else
-        echo ""
-        echo -e "  ${template_name}: ${RED}FEHLER${NC}"
-        echo "  Siehe Build-Log: ${LOG_FILE}"
-        echo "  Letzte 50 Zeilen:"
-        tail -50 "${BUILD_LOG}"
+        BUILD_LOG="${LOG_FILE}"
+        echo "" >> "${LOG_FILE}"
+        echo "=== Build: ${template_name} ===" >> "${LOG_FILE}"
+
+        docker build --no-cache -t "${image_name}" "${template_dir}/" >> "${BUILD_LOG}" 2>&1
+        BUILD_EXIT=$?
+        grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+        if [ $BUILD_EXIT -eq 0 ] && docker image inspect "${image_name}" >/dev/null 2>&1; then
+            echo ""
+            echo -e "  ${template_name}: ${GREEN}OK${NC}"
+            BUILT_TEMPLATES=$((BUILT_TEMPLATES + 1))
+        else
+            echo ""
+            echo -e "  ${template_name}: ${RED}FEHLER${NC}"
+            echo "  Siehe Build-Log: ${LOG_FILE}"
+            tail -50 "${BUILD_LOG}"
+            exit 1
+        fi
+
+        BUILD_STEP=$((BUILD_STEP + 1))
+    done
+
+    if [ $BUILT_TEMPLATES -eq 0 ]; then
+        echo -e "${RED}FEHLER: Keine Template-Verzeichnisse gefunden!${NC}"
         exit 1
     fi
 
+    echo ""
+    echo -e "${GREEN}Alle ${BUILT_TEMPLATES} Template(s) erfolgreich gebaut.${NC}"
+else
+    # .env-basiertes Building (neue Logik)
+    echo "  Baue Templates aus .env Konfiguration..."
+    echo ""
+
+    # Konvertiere zu Array (split by ;)
+    IFS=';' read -ra TEMPLATE_IMAGES <<< "$USER_TEMPLATE_IMAGES"
+
+    # Zähle Templates für Fortschrittsanzeige
+    TOTAL_TEMPLATES=${#TEMPLATE_IMAGES[@]}
+    TOTAL_BUILDS=$((2 + TOTAL_TEMPLATES))
     BUILD_STEP=$((BUILD_STEP + 1))
-done
 
-if [ $BUILT_TEMPLATES -eq 0 ]; then
-    echo -e "${RED}FEHLER: Keine Template-Verzeichnisse gefunden!${NC}"
-    echo "Erwartete Verzeichnisse: user-template*, z.B. user-template-01, user-template-next"
-    exit 1
+    BUILT_TEMPLATES=0
+
+    for image_with_tag in "${TEMPLATE_IMAGES[@]}"; do
+        # Entferne Whitespace
+        image_with_tag=$(echo "$image_with_tag" | xargs)
+
+        [ -z "$image_with_tag" ] && continue
+
+        # Extrahiere Verzeichnisnamen (vor dem :)
+        template_dir_name="${image_with_tag%%:*}"
+
+        # Extrahiere Tag (nach dem :)
+        template_tag="${image_with_tag##*:}"
+
+        # Fallback auf :latest wenn kein Tag
+        [ -z "$template_tag" ] && template_tag="latest"
+
+        # Vollständiger Pfad zum Template-Verzeichnis
+        template_dir="${INSTALL_DIR}/${template_dir_name}"
+
+        echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Template: ${template_dir_name}:${template_tag}"
+
+        # Prüfe ob Verzeichnis existiert
+        if [ ! -d "$template_dir" ]; then
+            echo -e "        ${RED}❌ Fehler: Template-Verzeichnis nicht gefunden${NC}"
+            echo "        Definiert in .env: USER_TEMPLATE_IMAGES"
+            echo "        Erwartetes Verzeichnis: ${template_dir}"
+            echo "        Überspringe dieses Template."
+            echo ""
+            BUILD_STEP=$((BUILD_STEP + 1))
+            continue
+        fi
+
+        # Dockerfile vorhanden?
+        if [ ! -f "${template_dir}/Dockerfile" ]; then
+            echo -e "        ${RED}❌ Fehler: Kein Dockerfile gefunden${NC}"
+            echo "        Pfad: ${template_dir}/Dockerfile"
+            echo "        Überspringe dieses Template."
+            echo ""
+            BUILD_STEP=$((BUILD_STEP + 1))
+            continue
+        fi
+
+        # Special handling für Next.js Templates
+        if [[ "$template_dir_name" == *"next"* ]]; then
+            echo -e "        ${BLUE}Dies kann 2-5 Minuten dauern (npm install + build)...${NC}"
+        fi
+
+        echo ""
+
+        BUILD_LOG="${LOG_FILE}"
+        echo "" >> "${LOG_FILE}"
+        echo "=== Build: ${template_dir_name}:${template_tag} ===" >> "${LOG_FILE}"
+
+        docker build --no-cache -t "${template_dir_name}:${template_tag}" "${template_dir}/" >> "${BUILD_LOG}" 2>&1
+        BUILD_EXIT=$?
+
+        # Gefilterten Output anzeigen
+        grep -E "(Step |#[0-9]+ |Successfully|ERROR|error:|COPY|RUN|FROM)" "${BUILD_LOG}" 2>/dev/null | sed 's/^/        /' || true
+
+        # Prüfe ob Build erfolgreich UND Image existiert
+        if [ $BUILD_EXIT -eq 0 ] && docker image inspect "${template_dir_name}:${template_tag}" >/dev/null 2>&1; then
+            echo ""
+            echo -e "        ${template_dir_name}: ${GREEN}OK${NC}"
+            BUILT_TEMPLATES=$((BUILT_TEMPLATES + 1))
+        else
+            echo ""
+            echo -e "        ${template_dir_name}: ${RED}FEHLER${NC}"
+            echo "        Siehe Build-Log: ${LOG_FILE}"
+            echo "        Letzte 50 Zeilen:"
+            tail -50 "${BUILD_LOG}"
+            exit 1
+        fi
+
+        echo ""
+        BUILD_STEP=$((BUILD_STEP + 1))
+    done
+
+    if [ $BUILT_TEMPLATES -eq 0 ]; then
+        echo -e "${RED}FEHLER: Keine Templates aus USER_TEMPLATE_IMAGES gebaut!${NC}"
+        echo "Prüfe .env: USER_TEMPLATE_IMAGES"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✅ ${BUILT_TEMPLATES}/${TOTAL_TEMPLATES} Template(s) erfolgreich gebaut.${NC}"
+
+    # Warne bei ungenutzten Template-Verzeichnissen
+    echo ""
+    echo "  Prüfe auf ungekonfigurierte Template-Verzeichnisse..."
+    UNUSED_COUNT=0
+
+    for template_dir in "${INSTALL_DIR}"/user-template*; do
+        [ -d "$template_dir" ] || continue
+        template_name=$(basename "$template_dir")
+
+        # Ist dieses Template in USER_TEMPLATE_IMAGES definiert?
+        if [[ ! "$USER_TEMPLATE_IMAGES" =~ "$template_name" ]]; then
+            if [ $UNUSED_COUNT -eq 0 ]; then
+                echo -e "  ${YELLOW}⚠️  Ungekonfigurierte Template-Verzeichnisse:${NC}"
+            fi
+            echo "        - ${template_name} (nicht in USER_TEMPLATE_IMAGES definiert)"
+            UNUSED_COUNT=$((UNUSED_COUNT + 1))
+        fi
+    done
+
+    if [ $UNUSED_COUNT -gt 0 ]; then
+        echo "  Hinweis: Diese Templates wurden NICHT gebaut."
+        echo "  Um sie zu bauen, füge sie zu .env hinzu: USER_TEMPLATE_IMAGES=...;${template_name}:latest"
+    fi
+    echo ""
 fi
-
-echo ""
-echo -e "${GREEN}Alle ${BUILT_TEMPLATES} Template(s) erfolgreich gebaut.${NC}"
 
 # Spawner Backend Image bauen
 echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Spawner API (Flask Backend)..."
