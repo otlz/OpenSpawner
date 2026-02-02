@@ -5,7 +5,7 @@ Alle Endpoints erfordern Admin-Rechte.
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from models import db, User, UserState, AdminTakeoverSession
+from models import db, User, UserState, AdminTakeoverSession, MagicLinkToken, UserContainer
 from decorators import admin_required
 from container_manager import ContainerManager
 from config import Config
@@ -159,34 +159,51 @@ def resend_user_verification(user_id):
 @jwt_required()
 @admin_required()
 def delete_user_container(user_id):
-    """Loescht den Container eines Benutzers"""
+    """Loescht alle Container eines Benutzers (Multi-Container Support)"""
+    admin_id = get_jwt_identity()
     user = User.query.get(user_id)
 
     if not user:
         return jsonify({'error': 'User nicht gefunden'}), 404
 
-    if not user.container_id:
-        return jsonify({'error': 'User hat keinen Container'}), 400
+    if not user.containers:
+        return jsonify({'error': 'User hat keine Container'}), 400
 
     container_mgr = ContainerManager()
+    deleted_count = 0
+    failed_containers = []
 
-    try:
-        container_mgr.stop_container(user.container_id)
-        container_mgr.remove_container(user.container_id)
-    except Exception as e:
-        current_app.logger.warning(f"Fehler beim Loeschen des Containers: {str(e)}")
+    # Iteriere über alle Container des Users
+    for container in user.containers:
+        if not container.container_id:
+            continue
 
-    old_container_id = user.container_id
-    user.container_id = None
-    user.container_port = None
+        try:
+            container_mgr.stop_container(container.container_id)
+            container_mgr.remove_container(container.container_id)
+            deleted_count += 1
+            current_app.logger.info(f"Container {container.container_id[:12]} (Type: {container.container_type}) gelöscht")
+
+            # Lösche DB-Eintrag
+            db.session.delete(container)
+        except Exception as e:
+            current_app.logger.warning(f"Container {container.container_id[:12]} konnte nicht gelöscht werden: {str(e)}")
+            failed_containers.append(container.container_id[:12])
+
     db.session.commit()
 
-    admin_id = get_jwt_identity()
-    current_app.logger.info(f"Container {old_container_id[:12]} von User {user.email} wurde von Admin {admin_id} geloescht")
+    current_app.logger.info(f"Admin {admin_id} löschte {deleted_count} Container von User {user.email}")
+
+    if failed_containers:
+        return jsonify({
+            'message': f'{deleted_count} Container gelöscht, {len(failed_containers)} fehlgeschlagen',
+            'failed': failed_containers,
+            'deleted': deleted_count
+        }), 207  # Multi-Status
 
     return jsonify({
-        'message': f'Container von {user.email} wurde geloescht',
-        'user': user.to_dict()
+        'message': f'Alle {deleted_count} Container von {user.email} wurden gelöscht',
+        'deleted': deleted_count
     }), 200
 
 
@@ -194,7 +211,7 @@ def delete_user_container(user_id):
 @jwt_required()
 @admin_required()
 def delete_user(user_id):
-    """Loescht einen Benutzer komplett"""
+    """Loescht einen Benutzer komplett (DSGVO-konform)"""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
@@ -208,23 +225,52 @@ def delete_user(user_id):
     if user.is_admin:
         return jsonify({'error': 'Admins koennen nicht geloescht werden'}), 400
 
-    # Container loeschen falls vorhanden
-    if user.container_id:
-        container_mgr = ContainerManager()
-        try:
-            container_mgr.stop_container(user.container_id)
-            container_mgr.remove_container(user.container_id)
-        except Exception as e:
-            current_app.logger.warning(f"Fehler beim Loeschen des Containers: {str(e)}")
-
     email = user.email
+    deletion_summary = {
+        'containers_deleted': 0,
+        'containers_failed': [],
+        'magic_tokens_deleted': 0,
+        'takeover_sessions_deleted': 0
+    }
+
+    # 1. Alle Docker-Container loeschen
+    container_mgr = ContainerManager()
+    for container in user.containers:
+        if container.container_id:
+            try:
+                container_mgr.stop_container(container.container_id)
+                container_mgr.remove_container(container.container_id)
+                deletion_summary['containers_deleted'] += 1
+                current_app.logger.info(f"Container {container.container_id[:12]} (Type: {container.container_type}) geloescht")
+            except Exception as e:
+                current_app.logger.warning(f"Container {container.container_id[:12]} fehlgeschlagen: {str(e)}")
+                deletion_summary['containers_failed'].append(container.container_id[:12])
+
+    # 2. MagicLinkToken loeschen (DSGVO: IP-Adressen)
+    magic_tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
+    for token in magic_tokens:
+        db.session.delete(token)
+        deletion_summary['magic_tokens_deleted'] += 1
+
+    # 3. AdminTakeoverSession loeschen (als Target-User)
+    takeover_sessions = AdminTakeoverSession.query.filter_by(target_user_id=user.id).all()
+    for session in takeover_sessions:
+        db.session.delete(session)
+        deletion_summary['takeover_sessions_deleted'] += 1
+
+    # 4. User loeschen (CASCADE loescht UserContainer-DB-Eintraege)
     db.session.delete(user)
     db.session.commit()
 
-    current_app.logger.info(f"User {email} wurde von Admin {admin_id} geloescht")
+    # Logging
+    current_app.logger.info(
+        f"User {email} vollstaendig geloescht von Admin {admin_id}. "
+        f"Summary: {deletion_summary}"
+    )
 
     return jsonify({
-        'message': f'User {email} wurde geloescht'
+        'message': f'User {email} wurde vollstaendig geloescht',
+        'summary': deletion_summary
     }), 200
 
 

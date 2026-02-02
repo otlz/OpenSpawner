@@ -33,7 +33,9 @@ import {
   ArrowLeft,
   Search,
   Monitor,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type StatusColor = "green" | "yellow" | "red";
 
@@ -109,7 +111,7 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -126,18 +128,36 @@ export default function AdminPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const showSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(""), 3000);
+  // Bulk-Selection Helpers
+  const toggleUserSelection = (userId: number) => {
+    const newSelection = new Set(selectedUserIds);
+    if (newSelection.has(userId)) {
+      newSelection.delete(userId);
+    } else {
+      newSelection.add(userId);
+    }
+    setSelectedUserIds(newSelection);
   };
 
+  const selectAllFiltered = () => {
+    const selectableIds = filteredUsers
+      .filter((u) => u.id !== user?.id && !u.is_admin)
+      .map((u) => u.id);
+    setSelectedUserIds(new Set(selectableIds));
+  };
+
+  const deselectAll = () => {
+    setSelectedUserIds(new Set());
+  };
+
+  // Single Actions
   const handleBlock = async (userId: number) => {
     setActionLoading(userId);
     const { data, error } = await adminApi.blockUser(userId);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      showSuccess(data?.message || "User gesperrt");
+      toast.success(data?.message || "User gesperrt");
       fetchUsers();
     }
     setActionLoading(null);
@@ -147,9 +167,9 @@ export default function AdminPage() {
     setActionLoading(userId);
     const { data, error } = await adminApi.unblockUser(userId);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      showSuccess(data?.message || "User entsperrt");
+      toast.success(data?.message || "User entsperrt");
       fetchUsers();
     }
     setActionLoading(null);
@@ -159,38 +179,53 @@ export default function AdminPage() {
     setActionLoading(userId);
     const { data, error } = await adminApi.resendVerification(userId);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      showSuccess(data?.message || "Verifizierungs-Email gesendet");
+      toast.success(data?.message || "Verifizierungs-Email gesendet");
     }
     setActionLoading(null);
   };
 
-  const handleDeleteContainer = async (userId: number) => {
-    if (!confirm("Container wirklich loeschen? Der User kann einen neuen Container starten.")) {
+  const handleDeleteContainer = async (userId: number, userEmail: string) => {
+    if (!confirm(`Container von "${userEmail}" wirklich loeschen? Der User kann einen neuen Container starten.`)) {
       return;
     }
     setActionLoading(userId);
     const { data, error } = await adminApi.deleteUserContainer(userId);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      showSuccess(data?.message || "Container geloescht");
+      toast.success(data?.message || "Container geloescht", {
+        description: data?.deleted ? `${data.deleted} Container entfernt` : undefined,
+      });
       fetchUsers();
     }
     setActionLoading(null);
   };
 
   const handleDeleteUser = async (userId: number, userEmail: string) => {
-    if (!confirm(`User "${userEmail}" wirklich loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden!`)) {
+    if (!confirm(
+      `⚠️ ACHTUNG: User "${userEmail}" VOLLSTAENDIG loeschen?\n\n` +
+      `Dies löscht:\n` +
+      `- User-Account und alle Daten\n` +
+      `- Alle Docker-Container\n` +
+      `- Alle Magic Link Tokens\n` +
+      `- Alle Takeover-Sessions\n\n` +
+      `Diese Aktion kann NICHT rueckgaengig gemacht werden!`
+    )) {
       return;
     }
     setActionLoading(userId);
     const { data, error } = await adminApi.deleteUser(userId);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      showSuccess(data?.message || "User geloescht");
+      toast.success(`User gelöscht: ${userEmail}`, {
+        description: data?.summary
+          ? `${data.summary.containers_deleted} Container, ${data.summary.magic_tokens_deleted} Tokens entfernt`
+          : undefined,
+        duration: 5000,
+      });
       fetchUsers();
     }
     setActionLoading(null);
@@ -198,16 +233,174 @@ export default function AdminPage() {
 
   const handleTakeover = async (userId: number) => {
     const reason = prompt("Grund fuer den Zugriff (optional):");
-    if (reason === null) return; // Abgebrochen
+    if (reason === null) return;
 
     setActionLoading(userId);
     const { data, error } = await adminApi.startTakeover(userId, reason);
     if (error) {
-      setError(error);
+      toast.error(`Fehler: ${error}`);
     } else {
-      alert(data?.note || "Takeover gestartet (Dummy)");
+      toast.info(data?.note || "Takeover gestartet (Dummy)", { duration: 4000 });
     }
     setActionLoading(null);
+  };
+
+  // Bulk Actions
+  const handleBulkBlock = async () => {
+    if (!confirm(`${selectedUserIds.size} User sperren?`)) {
+      return;
+    }
+
+    toast.loading(`Sperre ${selectedUserIds.size} User...`, { id: "bulk-block" });
+
+    let success = 0;
+    let failed = 0;
+
+    for (const userId of selectedUserIds) {
+      const { error } = await adminApi.blockUser(userId);
+      if (error) {
+        failed++;
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} User gesperrt`, {
+      id: "bulk-block",
+      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    deselectAll();
+  };
+
+  const handleBulkUnblock = async () => {
+    if (!confirm(`${selectedUserIds.size} User entsperren?`)) {
+      return;
+    }
+
+    toast.loading(`Entsperre ${selectedUserIds.size} User...`, { id: "bulk-unblock" });
+
+    let success = 0;
+    let failed = 0;
+
+    for (const userId of selectedUserIds) {
+      const { error } = await adminApi.unblockUser(userId);
+      if (error) {
+        failed++;
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} User entsperrt`, {
+      id: "bulk-unblock",
+      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    deselectAll();
+  };
+
+  const handleBulkDeleteContainers = async () => {
+    const userList = Array.from(selectedUserIds)
+      .map((id) => users.find((u) => u.id === id)?.email)
+      .filter(Boolean)
+      .join(", ");
+
+    if (!confirm(
+      `Container von ${selectedUserIds.size} Usern löschen?\n\n` +
+      `Betroffene User:\n${userList}\n\n` +
+      `User können danach neue Container erstellen.`
+    )) {
+      return;
+    }
+
+    toast.loading(`Lösche Container von ${selectedUserIds.size} Usern...`, { id: "bulk-delete-containers" });
+
+    let success = 0;
+    let failed = 0;
+
+    for (const userId of selectedUserIds) {
+      const { error } = await adminApi.deleteUserContainer(userId);
+      if (error) {
+        failed++;
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} User-Container gelöscht`, {
+      id: "bulk-delete-containers",
+      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    deselectAll();
+  };
+
+  const handleBulkDeleteUsers = async () => {
+    const selectedUsers = Array.from(selectedUserIds)
+      .map((id) => users.find((u) => u.id === id))
+      .filter(Boolean) as AdminUser[];
+
+    const userList = selectedUsers.map((u) => u.email).join("\n");
+
+    // Schritt 1: Vorschau
+    if (!confirm(
+      `⚠️ WARNUNG: ${selectedUserIds.size} User VOLLSTAENDIG löschen?\n\n` +
+      `Betroffene User:\n${userList}\n\n` +
+      `Dies löscht:\n` +
+      `- User-Accounts und alle Daten\n` +
+      `- Alle Docker-Container\n` +
+      `- Alle Magic Link Tokens\n` +
+      `- Alle Takeover-Sessions\n\n` +
+      `Klicken Sie OK für finalen Bestätigungsschritt.`
+    )) {
+      return;
+    }
+
+    // Schritt 2: Finale Bestätigung
+    const confirmation = prompt(
+      `FINALE BESTAETIGUNG:\n\n` +
+      `Geben Sie die Anzahl der zu löschenden User ein (${selectedUserIds.size}):`
+    );
+
+    if (confirmation !== String(selectedUserIds.size)) {
+      toast.error("Bulk-Delete abgebrochen (falsche Bestätigung)");
+      return;
+    }
+
+    toast.loading(`Lösche ${selectedUserIds.size} User...`, { id: "bulk-delete-users" });
+
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const userId of selectedUserIds) {
+      const selectedUser = selectedUsers.find((u) => u.id === userId);
+      const { error } = await adminApi.deleteUser(userId);
+
+      if (error) {
+        failed++;
+        errors.push(`${selectedUser?.email}: ${error}`);
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} User gelöscht`, {
+      id: "bulk-delete-users",
+      description: failed > 0 ? `${failed} fehlgeschlagen. Siehe Logs.` : "Alle Daten vollständig entfernt",
+      duration: 8000,
+    });
+
+    if (errors.length > 0) {
+      console.error("Bulk-Delete Errors:", errors);
+    }
+
+    fetchUsers();
+    deselectAll();
   };
 
   const handleLogout = async () => {
@@ -220,7 +413,7 @@ export default function AdminPage() {
     (u) =>
       u.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ).sort((a, b) => (b.created_at ? new Date(b.created_at).getTime() : 0) - (a.created_at ? new Date(a.created_at).getTime() : 0));
 
   // Statistiken
   const stats = {
@@ -285,22 +478,16 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Nachrichten */}
+        {/* Fehler-Alert (Fallback, Toasts sind Primary) */}
         {error && (
-          <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-            {error}
+          <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
+            <span>{error}</span>
             <button
               onClick={() => setError("")}
-              className="ml-2 underline"
+              className="ml-2 underline text-xs"
             >
               Schliessen
             </button>
-          </div>
-        )}
-
-        {successMessage && (
-          <div className="mb-6 rounded-md bg-green-100 p-4 text-sm text-green-800">
-            {successMessage}
           </div>
         )}
 
@@ -353,6 +540,73 @@ export default function AdminPage() {
           </Card>
         </div>
 
+        {/* Bulk-Action Bar */}
+        {selectedUserIds.size > 0 && (
+          <div className="mb-4 rounded-lg border border-primary bg-primary/5 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="font-medium">
+                  {selectedUserIds.size} User ausgewählt
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={deselectAll}
+                  className="text-xs"
+                >
+                  Auswahl aufheben
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Bulk-Block */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkBlock}
+                  disabled={actionLoading !== null}
+                >
+                  <ShieldOff className="mr-2 h-4 w-4" />
+                  Sperren
+                </Button>
+
+                {/* Bulk-Unblock */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkUnblock}
+                  disabled={actionLoading !== null}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Entsperren
+                </Button>
+
+                {/* Bulk-Delete-Container */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkDeleteContainers}
+                  disabled={actionLoading !== null}
+                >
+                  <Container className="mr-2 h-4 w-4" />
+                  Container löschen
+                </Button>
+
+                {/* Bulk-Delete User */}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDeleteUsers}
+                  disabled={actionLoading !== null}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  User löschen
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Suche */}
         <div className="mb-6 flex items-center gap-4">
           <div className="relative flex-1 max-w-md">
@@ -370,6 +624,33 @@ export default function AdminPage() {
           </Button>
         </div>
 
+        {/* Select-All Checkbox */}
+        {filteredUsers.length > 0 && (
+          <div className="mb-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={
+                selectedUserIds.size > 0 &&
+                selectedUserIds.size ===
+                  filteredUsers.filter(u => u.id !== user?.id && !u.is_admin).length
+              }
+              onChange={(e) => {
+                if (e.target.checked) {
+                  selectAllFiltered();
+                } else {
+                  deselectAll();
+                }
+              }}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm text-muted-foreground">
+              Alle{" "}
+              {filteredUsers.filter((u) => u.id !== user?.id && !u.is_admin).length}{" "}
+              User auswählen
+            </span>
+          </div>
+        )}
+
         {/* Benutzerliste */}
         <Card>
           <CardHeader>
@@ -383,16 +664,26 @@ export default function AdminPage() {
               {filteredUsers.map((u) => {
                 const statusColor = getStatusColor(u);
                 const isCurrentUser = u.id === user?.id;
+                const isSelectable = !isCurrentUser && !u.is_admin;
+                const isSelected = selectedUserIds.has(u.id);
 
                 return (
                   <div
                     key={u.id}
                     className={`flex items-center justify-between rounded-lg border p-4 ${
                       u.is_blocked ? "bg-red-50 border-red-200" : ""
-                    }`}
+                    } ${isSelected ? "bg-primary/5 border-primary" : ""}`}
                   >
-                    {/* User Info */}
+                    {/* Checkbox + User Info */}
                     <div className="flex items-center gap-4">
+                      {isSelectable && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleUserSelection(u.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      )}
                       <Avatar>
                         <AvatarFallback
                           className={`${
@@ -488,7 +779,7 @@ export default function AdminPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteContainer(u.id)}
+                              onClick={() => handleDeleteContainer(u.id, u.email)}
                               title="Container loeschen"
                             >
                               <Container className="h-4 w-4" />

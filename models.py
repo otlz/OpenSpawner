@@ -107,7 +107,7 @@ class MagicLinkToken(db.Model):
     __tablename__ = 'magic_link_token'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     token = db.Column(db.String(64), unique=True, nullable=False, index=True)
     token_type = db.Column(db.String(20), nullable=False)  # 'signup' oder 'login'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -115,7 +115,7 @@ class MagicLinkToken(db.Model):
     used_at = db.Column(db.DateTime, nullable=True)
     ip_address = db.Column(db.String(45), nullable=True)
 
-    user = db.relationship('User', backref=db.backref('magic_tokens', lazy=True))
+    user = db.relationship('User', backref=db.backref('magic_tokens', lazy=True, cascade='all, delete-orphan'))
 
     def is_valid(self):
         """Prüft ob Token noch gültig ist"""
@@ -168,11 +168,13 @@ class UserContainer(db.Model):
 class AdminTakeoverSession(db.Model):
     """Protokolliert Admin-Zugriffe auf User-Container (Phase 2)"""
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    target_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     ended_at = db.Column(db.DateTime, nullable=True)
     reason = db.Column(db.String(500), nullable=True)
 
-    admin = db.relationship('User', foreign_keys=[admin_id])
-    target_user = db.relationship('User', foreign_keys=[target_user_id])
+    admin = db.relationship('User', foreign_keys=[admin_id],
+                           backref=db.backref('takeover_sessions_as_admin', lazy=True))
+    target_user = db.relationship('User', foreign_keys=[target_user_id],
+                                 backref=db.backref('takeover_sessions_as_target', lazy=True, cascade='all, delete-orphan'))

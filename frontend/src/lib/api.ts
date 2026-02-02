@@ -148,6 +148,14 @@ export interface AdminActionResponse {
   message: string;
   user?: AdminUser;
   email_sent?: boolean;
+  deleted?: number;
+  failed?: string[];
+  summary?: {
+    containers_deleted: number;
+    containers_failed: string[];
+    magic_tokens_deleted: number;
+    takeover_sessions_deleted: number;
+  };
 }
 
 export interface TakeoverResponse {
@@ -273,6 +281,13 @@ export const adminApi = {
   deleteUser: (id: number) =>
     fetchApi<AdminActionResponse>(`/api/admin/users/${id}`, {
       method: "DELETE",
+    }),
+
+  // Bulk Delete Users
+  bulkDeleteUsers: (user_ids: number[]) =>
+    fetchApi<AdminActionResponse>("/api/admin/users/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ user_ids }),
     }),
 
   // Takeover (Phase 2 - Dummy)
