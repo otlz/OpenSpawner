@@ -152,11 +152,14 @@ def restart_container():
         container_mgr.stop_container(current_user.container_id)
         container_mgr.remove_container(current_user.container_id)
     
-    # Neuen Container starten
+    # Neuen Container starten - Multi-Container kompatibel
     try:
-        container_id, port = container_mgr.spawn_container(current_user.id, current_user.slug)
-        current_user.container_id = container_id
-        current_user.container_port = port
+        # Nutze spawn_multi_container für Primary Container
+        default_template = list(app.config['CONTAINER_TEMPLATES'].keys())[0]
+        container_id, port = container_mgr.spawn_multi_container(current_user.id, current_user.slug, default_template)
+        if current_user.containers:
+            current_user.containers[0].container_id = container_id
+            current_user.containers[0].container_port = port
         db.session.commit()
     except Exception as e:
         app.logger.error(f"Container-Restart fehlgeschlagen: {str(e)}")

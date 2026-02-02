@@ -220,15 +220,23 @@ def api_verify_signup():
     magic_token.mark_as_used()
     db.session.commit()
 
-    # Container spawnen (nur beim ersten Signup)
+    # Container spawnen (nur beim ersten Signup) - Multi-Container kompatibel
     if not user.container_id:
         try:
             container_mgr = ContainerManager()
-            container_id, port = container_mgr.spawn_container(user.id, user.slug)
-            user.container_id = container_id
-            user.container_port = port
+            # Nutze spawn_multi_container mit Standard-Template (template-01)
+            default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
+            container_id, port = container_mgr.spawn_multi_container(
+                user.id,
+                user.slug,
+                default_template
+            )
+            # Speichere in Primary Container (backwards compatibility)
+            if user.containers:
+                user.containers[0].container_id = container_id
+                user.containers[0].container_port = port
             db.session.commit()
-            current_app.logger.info(f"[SPAWNER] Container erstellt für User {user.id} (slug: {user.slug})")
+            current_app.logger.info(f"[SPAWNER] Container {default_template} erstellt für User {user.id} (slug: {user.slug})")
         except Exception as e:
             current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
             # User ist trotzdem erstellt, Container kann später manuell erstellt werden
@@ -307,18 +315,24 @@ def api_verify_login():
             # Container existiert nicht mehr - neuen erstellen
             current_app.logger.warning(f"Container {user.container_id[:12]} nicht gefunden, erstelle neuen: {str(e)}")
             try:
-                container_id, port = container_mgr.spawn_container(user.id, user.slug)
-                user.container_id = container_id
-                user.container_port = port
-                current_app.logger.info(f"[LOGIN] Neuer Container erstellt für User {user.email} (slug: {user.slug})")
+                # Nutze spawn_multi_container für Primary Container
+                default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
+                container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
+                if user.containers:
+                    user.containers[0].container_id = container_id
+                    user.containers[0].container_port = port
+                current_app.logger.info(f"[LOGIN] Neuer Container {default_template} erstellt für User {user.email} (slug: {user.slug})")
             except Exception as spawn_error:
                 current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(spawn_error)}")
     else:
         # Kein Container vorhanden - neu erstellen
         try:
-            container_id, port = container_mgr.spawn_container(user.id, user.slug)
-            user.container_id = container_id
-            user.container_port = port
+            # Nutze spawn_multi_container für Primary Container
+            default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
+            container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
+            if user.containers:
+                user.containers[0].container_id = container_id
+                user.containers[0].container_port = port
             current_app.logger.info(f"[LOGIN] Container erstellt für User {user.email} (slug: {user.slug})")
         except Exception as e:
             current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
@@ -447,11 +461,14 @@ def api_container_restart():
         except Exception as e:
             current_app.logger.warning(f"Alter Container konnte nicht gestoppt werden: {str(e)}")
 
-    # Neuen Container starten
+    # Neuen Container starten - Multi-Container kompatibel
     try:
-        container_id, port = container_mgr.spawn_container(user.id, user.slug)
-        user.container_id = container_id
-        user.container_port = port
+        # Nutze spawn_multi_container für Primary Container
+        default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
+        container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
+        if user.containers:
+            user.containers[0].container_id = container_id
+            user.containers[0].container_port = port
 
         # State auf ACTIVE setzen bei Container-Start (falls noch VERIFIED)
         if user.state == UserState.VERIFIED.value:
