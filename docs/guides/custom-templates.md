@@ -17,7 +17,7 @@
 
 Das Container Spawner System verwendet ein **dynamisches Template-System**, das beliebig viele User-Templates unterstützt:
 
-- **Automatische Erkennung**: `install.sh` findet und baut alle `user-template-*` Verzeichnisse
+- **Konfigurationsgesteuert**: `install.sh` baut **nur** die in `.env` unter `USER_TEMPLATE_IMAGES` definierten Templates
 - **Flexible Konfiguration**: Templates werden in `.env` definiert (semikolon-getrennt)
 - **Metadaten-Driven**: Display-Namen und Beschreibungen kommen aus `templates.json`
 - **Multi-Container Support**: Jeder User kann beliebig viele Container verschiedener Typen erstellen
@@ -36,19 +36,23 @@ Das Container Spawner System verwendet ein **dynamisches Template-System**, das 
 ### Wie das System funktioniert
 
 ```
-1. install.sh durchsucht Verzeichnis
+1. install.sh liest USER_TEMPLATE_IMAGES aus .env
    ↓
-2. Findet alle user-template-* Ordner
+2. Parst semikolon-getrennte Template-Liste
    ↓
-3. Baut Docker Images automatisch
+3. Baut NUR die definierten Docker Images
    ↓
-4. Backend lädt Template-Liste aus .env
+4. Validiert dass Verzeichnisse & Dockerfiles existieren
    ↓
-5. Metadaten werden aus templates.json geladen
+5. Warnt bei ungenutzten oder fehlenden Templates
    ↓
-6. Dashboard zeigt alle verfügbaren Templates
+6. Backend lädt aktualisierte Template-Liste aus .env
    ↓
-7. User klickt "Erstellen" → Container spawnt
+7. Metadaten werden aus templates.json geladen
+   ↓
+8. Dashboard zeigt verfügbare Templates
+   ↓
+9. User klickt "Erstellen" → Container spawnt
 ```
 
 ### Dateien im System
@@ -121,6 +125,13 @@ Templates **KÖNNEN NICHT**:
 ---
 
 ## Neues Template erstellen
+
+### ⚠️ WICHTIG: .env-Konfiguration
+
+**Bevor du ein Template hinzufügst, merke dir:**
+- Nur Templates die in `.env` → `USER_TEMPLATE_IMAGES` definiert sind, werden gebaut
+- Ohne `.env`-Eintrag wird `bash install.sh` das Template ignorieren
+- Daher: `.env` ZUERST aktualisieren, dann Template erstellen
 
 ### Schritt 1: Verzeichnis erstellen
 
@@ -562,22 +573,123 @@ curl -H "X-Debug-Token: <token>" \
 
 ### Automatisiertes Deployment (install.sh)
 
-Das `install.sh` Script baut **automatisch alle** `user-template-*` Verzeichnisse:
+Das `install.sh` Script baut **nur die in `.env` unter `USER_TEMPLATE_IMAGES` definierten** Templates:
 
 ```bash
-# Auf Server:
+# Lokale Installation
+cd /path/to/spawner
+cp .env.example .env        # Falls .env nicht existiert
+# Optional: nano .env        # USER_TEMPLATE_IMAGES anpassen
+bash install.sh             # Baut nur definierte Templates
+```
+
+```bash
+# Auf Server (mit git pull)
+ssh user@server
 cd /volume1/docker/spawner
-git pull
-bash install.sh
+git pull                    # Neue Templates/Änderungen herunterladen
+bash install.sh             # Baut nur definierte Templates
 ```
 
 **Was install.sh macht:**
-1. Findet alle `user-template-*` Verzeichnisse
-2. Baut Docker Images für jedes Template
-3. Startet Services neu
-4. Templates erscheinen automatisch im Dashboard
+1. Liest `USER_TEMPLATE_IMAGES` aus `.env`
+2. Parst semikolon-getrennte Template-Liste
+3. Baut Docker Images **nur** für definierte Templates
+4. Validiert dass Verzeichnisse und Dockerfiles existieren
+5. Warnt bei fehlenden oder ungenutzten Verzeichnissen
+6. Startet Services neu
+7. Templates erscheinen automatisch im Dashboard
 
-**Vorteil:** Keine manuellen Docker-Builds nötig!
+**Wichtig:**
+- Alle in `USER_TEMPLATE_IMAGES` definierten Templates müssen entsprechende Verzeichnisse haben
+- Verzeichnisse ohne `.env`-Eintrag werden NICHT gebaut
+- Falls `USER_TEMPLATE_IMAGES` nicht definiert ist, fallback auf alte Logik (baue alle)
+
+**Vorteil:**
+- Schnellere Installation (nur nötige Templates)
+- Volle Kontrolle über welche Templates verfügbar sind
+- Keine unnötigen Docker-Builds
+
+---
+
+## Template Build-Prozess (.env-basiert)
+
+### Wie install.sh Templates auswählt
+
+Das System nutzt `USER_TEMPLATE_IMAGES` in `.env` um zu bestimmen, welche Templates gebaut werden:
+
+```bash
+# In .env definiert:
+USER_TEMPLATE_IMAGES="user-template-01:latest;user-template-next:latest"
+
+# Verzeichnisstruktur:
+user-template-01/Dockerfile      ✅ wird gebaut
+user-template-02/Dockerfile      ⏭️  wird NICHT gebaut (nicht in .env)
+user-template-next/Dockerfile    ✅ wird gebaut
+```
+
+### Validation & Fehlerbehandlung
+
+`install.sh` prüft automatisch:
+
+1. **Verzeichnis-Existenz:**
+   - ✅ Template in `.env` + Verzeichnis vorhanden → baue
+   - ⚠️ Template in `.env` + Verzeichnis fehlt → Warnung, überspringe
+
+2. **Dockerfile-Existenz:**
+   - ✅ Dockerfile vorhanden → baue
+   - ⚠️ Dockerfile fehlt → Warnung, überspringe
+
+3. **Ungekonfigurierte Verzeichnisse:**
+   - ⚠️ Verzeichnis existiert, aber nicht in `USER_TEMPLATE_IMAGES` → Warnung
+
+4. **Build-Fehler:**
+   - ❌ Docker-Build schlägt fehl → Exit mit Fehler
+
+### Beispiel: Teilmenge Templates bauen
+
+**Szenario:** Nur Nginx Basic und Next.js bauen (nicht Nginx Advanced)
+
+```bash
+# 1. Bearbeite .env
+nano .env
+
+# 2. Ändere USER_TEMPLATE_IMAGES:
+# ALT:
+USER_TEMPLATE_IMAGES="user-template-01:latest;user-template-02:latest;user-template-next:latest"
+
+# NEU (nur zwei):
+USER_TEMPLATE_IMAGES="user-template-01:latest;user-template-next:latest"
+
+# 3. Starte install.sh
+bash install.sh
+
+# Output:
+# Baue Templates aus .env Konfiguration...
+# [1/2] Baue Template: user-template-01:latest
+#   ✅ user-template-01: OK
+# [2/2] Baue Template: user-template-next:latest
+#   ✅ user-template-next: OK (kann 2-5 Min dauern)
+# ✅ 2/2 Template(s) erfolgreich gebaut.
+#
+# ⚠️  Ungekonfigurierte Template-Verzeichnisse:
+#   - user-template-02 (nicht in USER_TEMPLATE_IMAGES definiert)
+```
+
+### Fallback bei fehlender Konfiguration
+
+Falls `USER_TEMPLATE_IMAGES` nicht definiert ist:
+
+```bash
+# .env fehlt oder USER_TEMPLATE_IMAGES leer
+bash install.sh
+
+# Output:
+# ⚠️  USER_TEMPLATE_IMAGES nicht konfiguriert
+# Fallback: Baue alle user-template-* Verzeichnisse (alte Logik)...
+#
+# → Baut alle verfügbaren Templates (Alt-Verhalten für Kompatibilität)
+```
 
 ---
 
@@ -850,51 +962,62 @@ docker images | grep user-template-xyz
 ### Schnell-Anleitung
 
 ```bash
+# 0. ZUERST: .env aktualisieren!
+nano .env
+# USER_TEMPLATE_IMAGES="...;user-template-myapp:latest"
+
 # 1. Verzeichnis erstellen
 mkdir user-template-myapp
 
 # 2. Dockerfile erstellen (Port 8080, unprivileged user)
 nano user-template-myapp/Dockerfile
 
-# 3. Assets hinzufügen
+# 3. Assets hinzufügen (z.B. index.html für Nginx)
 cp index.html user-template-myapp/
 
-# 4. .env aktualisieren
-# USER_TEMPLATE_IMAGES="...;user-template-myapp:latest"
+# 4. templates.json aktualisieren
+nano templates.json
+# { "type": "template-myapp", "image": "user-template-myapp:latest", ... }
 
-# 5. templates.json aktualisieren
-# { "type": "template-myapp", "image": "...", ... }
-
-# 6. Bauen & Testen
+# 5. Bauen & Testen (lokal)
 docker build -t user-template-myapp:latest user-template-myapp/
 docker run -d -p 8080:8080 --name test user-template-myapp:latest
 curl http://localhost:8080
 docker stop test && docker rm test
 
-# 7. Committen
+# 6. Committen & Pushen
 git add user-template-myapp/ .env templates.json
 git commit -m "feat: add template-myapp"
 git push
 
-# 8. Auf Server deployen
+# 7. Auf Server deployen
 ssh user@server
 cd /volume1/docker/spawner
+
+# Wichtig: git pull BEVOR install.sh!
 git pull
-docker build -t user-template-myapp:latest user-template-myapp/
-docker cp .env spawner:/app/.env
-docker cp templates.json spawner:/app/templates.json
-docker-compose restart spawner
+
+# install.sh baut automatisch nur die in .env definierten Templates
+bash install.sh
+# → Baut user-template-myapp (weil in .env definiert)
+
+# 8. Überprüfung
+docker-compose logs spawner | tail -20
+# Dashboard öffnen und Template prüfen
 ```
 
 ### Checkliste
 
 - [ ] Template-Verzeichnis `user-template-<name>/` erstellt
 - [ ] Dockerfile mit Port 8080 und unprivileged user
+- [ ] **WICHTIG: `.env` → `USER_TEMPLATE_IMAGES` aktualisiert** (sonst wird Template nicht gebaut!)
 - [ ] Template lokal gebaut und getestet
-- [ ] `.env` → `USER_TEMPLATE_IMAGES` aktualisiert
 - [ ] `templates.json` mit Metadaten erweitert
 - [ ] Änderungen committed und gepusht
-- [ ] Auf Server deployed (git pull + docker cp + restart)
+- [ ] Auf Server deployed:
+  - [ ] `git pull` (holt neue Änderungen)
+  - [ ] `bash install.sh` (baut Templates aus `.env`)
+  - [ ] Überprüfe Logs: `docker-compose logs spawner`
 - [ ] Dashboard überprüft (Template sichtbar?)
 - [ ] Container erfolgreich erstellt und erreichbar
 
