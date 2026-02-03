@@ -9,7 +9,9 @@ set -e
 REPO_URL="https://gitea.iotxs.de/RainerWieland/spawner.git"
 RAW_URL="https://gitea.iotxs.de/RainerWieland/spawner/raw/branch/main"
 INSTALL_DIR="${PWD}"
-VERSION="0.1.0"
+# VERSION automatisch aus Git-Tags bestimmen (z.B. v0.1.0, v0.2.1)
+# Fallback auf "dev" wenn keine Tags vorhanden
+VERSION=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo "dev")
 LOG_FILE="${INSTALL_DIR}/spawner-install.log"
 
 # Farben fuer Output
