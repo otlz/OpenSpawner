@@ -197,16 +197,13 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
 
     cd "${INSTALL_DIR}"
 
-    # Sichere lokale Aenderungen (ignoriere Fehler)
-    if git diff --quiet 2>/dev/null; then
-        : # Keine Aenderungen
-    else
-        echo "Lokale Aenderungen gefunden, erstelle Stash..."
-        git stash 2>/dev/null || true
-    fi
+    # WICHTIG: Auf Synology gibt es Berechtigungsbits-Unterschiede (old mode 100644 vs new mode 100755)
+    # Diese sind KEINE echten Code-Aenderungen, daher einfach die Remote-Version nehmen
+    git fetch origin 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || true
 
-    # Update durchfuehren
-    if git fetch origin 2>/dev/null && git pull origin main 2>/dev/null; then
+    # Update durchfuehren (nach Reset sollte es funktionieren)
+    if git pull origin main 2>/dev/null; then
         echo -e "${GREEN}Repository aktualisiert${NC}"
     else
         echo -e "${YELLOW}Git-Update fehlgeschlagen, fahre mit lokalen Dateien fort...${NC}"
