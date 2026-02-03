@@ -32,18 +32,43 @@ function VerifyLoginContent() {
     }
 
     const verify = async () => {
-      const result = await verifyLogin(token);
+      const maxRetries = 5;
+      const retryDelay = 2000; // 2 Sekunden
+      const maxTimeout = 10000; // 10 Sekunden Gesamtzeit
 
-      if (result.success) {
-        setStatus("success");
-        // Redirect nach 1 Sekunde zum Dashboard
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 1000);
-      } else {
-        setStatus("error");
-        setError("Ungültiger oder abgelaufener Link");
+      let attempt = 0;
+      const startTime = Date.now();
+
+      while (attempt < maxRetries) {
+        // Prüfe ob Timeout überschritten
+        if (Date.now() - startTime > maxTimeout) {
+          setStatus("error");
+          setError("Login hat zu lange gedauert. Bitte versuche es später erneut.");
+          return;
+        }
+
+        const result = await verifyLogin(token);
+
+        if (result.success) {
+          setStatus("success");
+          // Redirect nach 1 Sekunde zum Dashboard
+          setTimeout(() => {
+            router.push("/dashboard");
+          }, 1000);
+          return;
+        }
+
+        // Fehler - Versuche erneut (außer beim letzten Versuch)
+        attempt++;
+        if (attempt < maxRetries) {
+          // Warte vor nächstem Versuch
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
       }
+
+      // Alle Versuche fehlgeschlagen
+      setStatus("error");
+      setError("Login fehlgeschlagen. Bitte versuche den Link erneut anzufordern.");
     };
 
     verify();
