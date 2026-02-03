@@ -150,5 +150,35 @@ docker-compose up -d --build
 
 ---
 
+---
+
+## Synology NAS: Git Berechtigungsbits Problem
+
+**Bei `git pull` auf Synology:**
+```bash
+error: Your local changes to the following files would be overwritten by merge:
+        api.py
+        container_manager.py
+```
+
+**Ursache:** Synology ändert automatisch Datei-Berechtigungen (executable bit).
+
+**Lösung:**
+```bash
+# Lokale Berechtigungsänderungen verwerfen
+git checkout api.py container_manager.py
+
+# Dann pull machen
+git pull origin main
+```
+
+Das ist NICHT ein echtes Code-Problem - nur Berechtigungsbits:
+```
+old mode 100644  (nicht ausführbar)
+new mode 100755  (ausführbar)
+```
+
+---
+
 **Dokumentation:** 2026-02-03
 **Getestet auf:** Synology NAS, Docker 20.10+, Docker Compose 2.0+
