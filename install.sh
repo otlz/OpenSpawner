@@ -303,13 +303,9 @@ else
     echo "  1. Starte Traefik zuerst (empfohlen)"
     echo "  2. Erstelle das Netzwerk manuell: docker network create ${NETWORK}"
     echo ""
-    read -p "Netzwerk jetzt manuell erstellen? (j/N): " create_network
-    if [ "$create_network" = "j" ] || [ "$create_network" = "J" ]; then
-        docker network create "${NETWORK}"
-        echo -e "  Netzwerk '${NETWORK}': ${GREEN}erstellt${NC}"
-    else
-        exit 1
-    fi
+    echo "Erstelle Netzwerk automatisch..."
+    docker network create "${NETWORK}" 2>/dev/null || true
+    echo -e "  Netzwerk '${NETWORK}': ${GREEN}erstellt/vorhanden${NC}"
 fi
 
 # ============================================================
@@ -361,13 +357,6 @@ else
     echo "    - Kein automatisches HTTPS"
     echo "    - Kein Subdomain-Routing"
     echo ""
-    read -p "  Trotzdem fortfahren? (j/N): " continue_without_traefik
-    if [ "$continue_without_traefik" != "j" ] && [ "$continue_without_traefik" != "J" ]; then
-        echo ""
-        echo "Installation abgebrochen."
-        echo "Starte zuerst Traefik und fuehre dann erneut 'bash install.sh' aus."
-        exit 1
-    fi
     echo -e "  ${YELLOW}Fortfahren ohne Traefik...${NC}"
 fi
 
