@@ -239,6 +239,7 @@ def api_verify_signup():
             current_app.logger.info(f"[SPAWNER] Container {default_template} erstellt für User {user.id} (slug: {user.slug})")
         except Exception as e:
             current_app.logger.error(f"Container-Spawn fehlgeschlagen: {str(e)}")
+            # Notiere: Container-Spawn ist optional beim Signup
             # User ist trotzdem erstellt, Container kann später manuell erstellt werden
 
     # JWT erstellen

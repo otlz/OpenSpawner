@@ -189,6 +189,34 @@ class ContainerManager:
                 'spawner.managed': 'true'
             }
 
+            # Prüfe ob Container bereits existiert (z.B. nach Fehler oder fehlgeschlagener Löschung)
+            try:
+                existing_container = self._get_client().containers.get(container_name)
+                print(f"[SPAWNER] Container {container_name} existiert bereits (Status: {existing_container.status})")
+
+                if existing_container.status == 'running':
+                    # Container läuft bereits
+                    return existing_container.id, 8080
+                else:
+                    # Container gestoppt - versuche zu starten
+                    try:
+                        existing_container.start()
+                        print(f"[SPAWNER] Existierender Container {container_name} neu gestartet")
+                        return existing_container.id, 8080
+                    except Exception as e:
+                        # Container kann nicht gestartet werden - lösche ihn und erstelle neuen
+                        print(f"[SPAWNER] Kann Container nicht starten, lösche: {str(e)}")
+                        try:
+                            existing_container.remove(force=True)
+                            print(f"[SPAWNER] Alten Container {container_name} gelöscht - erstelle neuen")
+                            # Fahre fort um neuen Container zu erstellen
+                        except Exception as remove_err:
+                            print(f"[SPAWNER] WARNUNG: Kann alten Container nicht löschen: {str(remove_err)}")
+                            # Fahre trotzdem fort und versuche neuen zu erstellen
+            except docker.errors.NotFound:
+                # Container existiert nicht - das ist normal, weiterfahren
+                pass
+
             # Logging: Traefik-Labels ausgeben
             print(f"[SPAWNER] Creating {container_type} container user-{slug}-{container_type}-{user_id}")
             print(f"[SPAWNER] Image: {image}")
