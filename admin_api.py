@@ -605,3 +605,65 @@ def debug_management():
 
     else:
         return jsonify({'error': f'Unbekannte Action: {action}'}), 400
+
+
+@admin_bp.route('/config/reload', methods=['POST'])
+@jwt_required()
+@admin_required()
+def reload_config():
+    """
+    Lädt .env neu und aktualisiert alle Config-Werte.
+    WICHTIG: Nach .env Änderungen IMMER diesen Endpoint aufrufen!
+
+    Statt: docker-compose down + docker-compose up -d
+    Einfach: curl -X POST http://localhost:5000/api/admin/config/reload -H "Authorization: Bearer $JWT_TOKEN"
+    """
+    try:
+        from dotenv import load_dotenv
+        import os
+
+        admin_id = get_jwt_identity()
+
+        current_app.logger.info(f"[CONFIG] Admin {admin_id} fordert Config-Reload an")
+
+        # .env neu laden
+        load_dotenv()
+
+        # Aktualisiere alle wichtigen Config-Werte (ohne dass wir die Config-Klasse neu laden müssen)
+        # Diese Werte werden direkt in den Endpoints verwendet
+        old_smtp_user = current_app.config.get('SMTP_USER')
+        old_smtp_from = current_app.config.get('SMTP_FROM')
+        old_base_domain = current_app.config.get('BASE_DOMAIN')
+
+        # Lese neue Werte
+        new_smtp_user = os.getenv('SMTP_USER')
+        new_smtp_from = os.getenv('SMTP_FROM')
+        new_base_domain = os.getenv('BASE_DOMAIN')
+
+        # Aktualisiere Flask-Config
+        current_app.config['SMTP_USER'] = new_smtp_user
+        current_app.config['SMTP_FROM'] = new_smtp_from
+        current_app.config['BASE_DOMAIN'] = new_base_domain
+        current_app.config['SMTP_HOST'] = os.getenv('SMTP_HOST')
+        current_app.config['SMTP_PORT'] = os.getenv('SMTP_PORT')
+        current_app.config['SMTP_PASSWORD'] = os.getenv('SMTP_PASSWORD')
+
+        changes = []
+        if old_smtp_user != new_smtp_user:
+            changes.append(f"SMTP_USER: {old_smtp_user} → {new_smtp_user}")
+        if old_smtp_from != new_smtp_from:
+            changes.append(f"SMTP_FROM: {old_smtp_from} → {new_smtp_from}")
+        if old_base_domain != new_base_domain:
+            changes.append(f"BASE_DOMAIN: {old_base_domain} → {new_base_domain}")
+
+        current_app.logger.info(f"[CONFIG] Reload erfolgreich. Änderungen: {', '.join(changes) if changes else 'keine'}")
+
+        return jsonify({
+            'message': 'Config erfolgreich reloaded',
+            'timestamp': datetime.utcnow().isoformat(),
+            'changes': changes if changes else ['keine Änderungen erkannt']
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"[CONFIG] Reload fehlgeschlagen: {str(e)}")
+        return jsonify({'error': f'Config-Reload fehlgeschlagen: {str(e)}'}), 500
