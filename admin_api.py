@@ -17,12 +17,16 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 @jwt_required()
 @admin_required()
 def get_users():
-    """Listet alle Benutzer auf"""
+    """Listet alle Benutzer auf (mit Container-Info für Phase 7)"""
     users = User.query.all()
 
     users_list = []
     for user in users:
-        users_list.append(user.to_dict())
+        user_dict = user.to_dict()
+        # Füge Container-Info hinzu (Phase 7)
+        user_dict['container_count'] = len(user.containers)
+        user_dict['containers'] = [c.to_dict() for c in user.containers]
+        users_list.append(user_dict)
 
     return jsonify({
         'users': users_list,
@@ -59,7 +63,7 @@ def get_user(user_id):
 @jwt_required()
 @admin_required()
 def block_user(user_id):
-    """Sperrt einen Benutzer"""
+    """Sperrt einen Benutzer und alle seine Container (Cascading - Phase 7)"""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
@@ -79,13 +83,32 @@ def block_user(user_id):
     user.is_blocked = True
     user.blocked_at = datetime.utcnow()
     user.blocked_by = int(admin_id)
+
+    # CASCADE: Alle Container des Users blockieren (Phase 7)
+    container_mgr = ContainerManager()
+    blocked_containers = 0
+
+    for container in user.containers:
+        if not container.is_blocked:
+            try:
+                if container.container_id:
+                    container_mgr.stop_container(container.container_id)
+            except Exception as e:
+                current_app.logger.warning(f"Container stoppen fehlgeschlagen: {str(e)}")
+
+            container.is_blocked = True
+            container.blocked_at = datetime.utcnow()
+            container.blocked_by = int(admin_id)
+            blocked_containers += 1
+
     db.session.commit()
 
-    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} gesperrt")
+    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} gesperrt (cascade: {blocked_containers} Container blockiert)")
 
     return jsonify({
         'message': f'User {user.email} wurde gesperrt',
-        'user': user.to_dict()
+        'user': user.to_dict(),
+        'containers_blocked': blocked_containers
     }), 200
 
 
@@ -93,7 +116,7 @@ def block_user(user_id):
 @jwt_required()
 @admin_required()
 def unblock_user(user_id):
-    """Entsperrt einen Benutzer"""
+    """Entsperrt einen Benutzer (User-Level Blockade)"""
     user = User.query.get(user_id)
 
     if not user:
@@ -110,9 +133,17 @@ def unblock_user(user_id):
     admin_id = get_jwt_identity()
     current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} entsperrt")
 
+    # Hinweis: Container-Level Blockaden werden NICHT automatisch aufgehoben
+    # Diese müssen separat über /api/admin/containers/<id>/unblock entsperrt werden
+    unblocked_containers = 0
+    for container in user.containers:
+        if container.is_blocked:
+            unblocked_containers += 1
+
     return jsonify({
         'message': f'User {user.email} wurde entsperrt',
-        'user': user.to_dict()
+        'user': user.to_dict(),
+        'note': f'{unblocked_containers} Container sind noch blockiert und müssen separat entsperrt werden'
     }), 200
 
 
@@ -605,6 +636,146 @@ def debug_management():
 
     else:
         return jsonify({'error': f'Unbekannte Action: {action}'}), 400
+
+
+# ============================================================
+# Container Blocking Endpoints (Phase 7)
+# ============================================================
+
+@admin_bp.route('/containers/<int:container_id>/block', methods=['POST'])
+@jwt_required()
+@admin_required()
+def block_container(container_id):
+    """Blockiert einen einzelnen User-Container"""
+    admin_id = get_jwt_identity()
+
+    container = UserContainer.query.get(container_id)
+    if not container:
+        return jsonify({'error': 'Container nicht gefunden'}), 404
+
+    if container.is_blocked:
+        return jsonify({'error': 'Container ist bereits gesperrt'}), 400
+
+    # Container stoppen
+    container_mgr = ContainerManager()
+    try:
+        if container.container_id:
+            container_mgr.stop_container(container.container_id)
+    except Exception as e:
+        current_app.logger.warning(f"Container stoppen fehlgeschlagen: {str(e)}")
+
+    # DB aktualisieren
+    container.is_blocked = True
+    container.blocked_at = datetime.utcnow()
+    container.blocked_by = int(admin_id)
+    db.session.commit()
+
+    current_app.logger.info(f"Container {container.id} ({container.container_type}) gesperrt von Admin {admin_id}")
+
+    return jsonify({
+        'message': f'Container {container.container_type} wurde gesperrt'
+    }), 200
+
+
+@admin_bp.route('/containers/<int:container_id>/unblock', methods=['POST'])
+@jwt_required()
+@admin_required()
+def unblock_container(container_id):
+    """Entsperrt einen einzelnen User-Container"""
+    admin_id = get_jwt_identity()
+
+    container = UserContainer.query.get(container_id)
+    if not container:
+        return jsonify({'error': 'Container nicht gefunden'}), 404
+
+    if not container.is_blocked:
+        return jsonify({'error': 'Container ist nicht gesperrt'}), 400
+
+    # DB aktualisieren
+    container.is_blocked = False
+    container.blocked_at = None
+    container.blocked_by = None
+    db.session.commit()
+
+    current_app.logger.info(f"Container {container.id} ({container.container_type}) entsperrt von Admin {admin_id}")
+
+    return jsonify({
+        'message': f'Container {container.container_type} wurde entsperrt',
+        'info': 'User kann Container jetzt manuell starten'
+    }), 200
+
+
+@admin_bp.route('/containers/bulk-block', methods=['POST'])
+@jwt_required()
+@admin_required()
+def bulk_block_containers():
+    """Blockiert mehrere Container gleichzeitig"""
+    admin_id = get_jwt_identity()
+    container_ids = request.json.get('container_ids', [])
+
+    if not container_ids:
+        return jsonify({'error': 'container_ids array required'}), 400
+
+    success = 0
+    failed = []
+    container_mgr = ContainerManager()
+
+    for container_id in container_ids:
+        container = UserContainer.query.get(container_id)
+        if not container or container.is_blocked:
+            failed.append(container_id)
+            continue
+
+        try:
+            if container.container_id:
+                container_mgr.stop_container(container.container_id)
+        except Exception as e:
+            current_app.logger.warning(f"Container {container_id} stoppen fehlgeschlagen: {str(e)}")
+
+        container.is_blocked = True
+        container.blocked_at = datetime.utcnow()
+        container.blocked_by = int(admin_id)
+        success += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'{success} Container gesperrt',
+        'failed': failed
+    }), 200 if not failed else 207
+
+
+@admin_bp.route('/containers/bulk-unblock', methods=['POST'])
+@jwt_required()
+@admin_required()
+def bulk_unblock_containers():
+    """Entsperrt mehrere Container gleichzeitig"""
+    admin_id = get_jwt_identity()
+    container_ids = request.json.get('container_ids', [])
+
+    if not container_ids:
+        return jsonify({'error': 'container_ids array required'}), 400
+
+    success = 0
+    failed = []
+
+    for container_id in container_ids:
+        container = UserContainer.query.get(container_id)
+        if not container or not container.is_blocked:
+            failed.append(container_id)
+            continue
+
+        container.is_blocked = False
+        container.blocked_at = None
+        container.blocked_by = None
+        success += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'{success} Container entsperrt',
+        'failed': failed
+    }), 200 if not failed else 207
 
 
 @admin_bp.route('/config/reload', methods=['POST'])

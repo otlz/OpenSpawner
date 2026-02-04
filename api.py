@@ -542,7 +542,10 @@ def api_user_containers():
             'service_url': service_url,
             'container_id': user_container.container_id if user_container else None,
             'created_at': user_container.created_at.isoformat() if user_container and user_container.created_at else None,
-            'last_used': user_container.last_used.isoformat() if user_container and user_container.last_used else None
+            'last_used': user_container.last_used.isoformat() if user_container and user_container.last_used else None,
+            # Phase 7: Container Blocking
+            'is_blocked': user_container.is_blocked if user_container else False,
+            'blocked_at': user_container.blocked_at.isoformat() if user_container and user_container.blocked_at else None
         })
 
     return jsonify({'containers': containers}), 200
@@ -567,6 +570,13 @@ def api_container_launch(container_type):
         user_id=user.id,
         container_type=container_type
     ).first()
+
+    # Launch-Protection: Blockierte Container dürfen nicht gestartet werden (Phase 7)
+    if user_container and user_container.is_blocked:
+        return jsonify({
+            'error': 'Dieser Container wurde von einem Administrator gesperrt',
+            'blocked_at': user_container.blocked_at.isoformat() if user_container.blocked_at else None
+        }), 403
 
     container_mgr = ContainerManager()
 

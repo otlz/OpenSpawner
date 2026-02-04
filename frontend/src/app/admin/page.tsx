@@ -112,6 +112,8 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
+  const [activeTab, setActiveTab] = useState<"users" | "containers">("users");
+  const [selectedContainerIds, setSelectedContainerIds] = useState<Set<number>>(new Set());
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -403,6 +405,103 @@ export default function AdminPage() {
     deselectAll();
   };
 
+  // Container Actions (Phase 7)
+  const toggleContainerSelection = (containerId: number) => {
+    const newSelection = new Set(selectedContainerIds);
+    if (newSelection.has(containerId)) {
+      newSelection.delete(containerId);
+    } else {
+      newSelection.add(containerId);
+    }
+    setSelectedContainerIds(newSelection);
+  };
+
+  const handleBlockContainer = async (containerId: number, containerType: string) => {
+    if (!confirm(`Container "${containerType}" sperren?\n\nDer Container wird gestoppt und kann vom User nicht neu gestartet werden.`)) {
+      return;
+    }
+
+    setActionLoading(containerId);
+    const { error } = await adminApi.blockContainer(containerId);
+    if (error) {
+      toast.error(`Fehler: ${error}`);
+    } else {
+      toast.success(`Container ${containerType} gesperrt`);
+      fetchUsers();
+    }
+    setActionLoading(null);
+  };
+
+  const handleUnblockContainer = async (containerId: number, containerType: string) => {
+    setActionLoading(containerId);
+    const { error } = await adminApi.unblockContainer(containerId);
+    if (error) {
+      toast.error(`Fehler: ${error}`);
+    } else {
+      toast.success(`Container ${containerType} entsperrt`, {
+        description: "User kann Container jetzt manuell starten",
+      });
+      fetchUsers();
+    }
+    setActionLoading(null);
+  };
+
+  const handleBulkBlockContainers = async () => {
+    if (!confirm(`${selectedContainerIds.size} Container sperren?`)) {
+      return;
+    }
+
+    toast.loading(`Sperre ${selectedContainerIds.size} Container...`, { id: "bulk-block-containers" });
+
+    let success = 0;
+    let failed = 0;
+
+    for (const containerId of selectedContainerIds) {
+      const { error } = await adminApi.blockContainer(containerId);
+      if (error) {
+        failed++;
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} Container gesperrt`, {
+      id: "bulk-block-containers",
+      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    setSelectedContainerIds(new Set());
+  };
+
+  const handleBulkUnblockContainers = async () => {
+    if (!confirm(`${selectedContainerIds.size} Container entsperren?`)) {
+      return;
+    }
+
+    toast.loading(`Entsperre ${selectedContainerIds.size} Container...`, { id: "bulk-unblock-containers" });
+
+    let success = 0;
+    let failed = 0;
+
+    for (const containerId of selectedContainerIds) {
+      const { error } = await adminApi.unblockContainer(containerId);
+      if (error) {
+        failed++;
+      } else {
+        success++;
+      }
+    }
+
+    toast.success(`${success} Container entsperrt`, {
+      id: "bulk-unblock-containers",
+      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    setSelectedContainerIds(new Set());
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
@@ -472,10 +571,44 @@ export default function AdminPage() {
       {/* Main Content */}
       <main className="container mx-auto p-4 md:p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">Benutzerverwaltung</h1>
+          <h1 className="text-3xl font-bold">
+            {activeTab === "users" ? "Benutzerverwaltung" : "Container-Verwaltung"}
+          </h1>
           <p className="text-muted-foreground">
-            Verwalte alle registrierten Benutzer
+            {activeTab === "users" ? "Verwalte alle registrierten Benutzer" : "Verwalte alle Benutzer-Container"}
           </p>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="mb-6 flex gap-2 border-b">
+          <button
+            className={`px-4 py-2 font-medium ${
+              activeTab === "users"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setActiveTab("users");
+              setSelectedContainerIds(new Set());
+            }}
+          >
+            <Users className="mr-2 inline-block h-4 w-4" />
+            User-Verwaltung
+          </button>
+          <button
+            className={`px-4 py-2 font-medium ${
+              activeTab === "containers"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setActiveTab("containers");
+              setSelectedUserIds(new Set());
+            }}
+          >
+            <Container className="mr-2 inline-block h-4 w-4" />
+            Container-Verwaltung
+          </button>
         </div>
 
         {/* Fehler-Alert (Fallback, Toasts sind Primary) */}
@@ -491,6 +624,8 @@ export default function AdminPage() {
           </div>
         )}
 
+        {activeTab === "users" && (
+          <>
         {/* Statistiken */}
         <div className="mb-6 grid gap-4 md:grid-cols-5">
           <Card>
@@ -851,6 +986,193 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
+
+        {activeTab === "containers" && (
+          <>
+            {/* Container Bulk-Action Bar */}
+            {selectedContainerIds.size > 0 && (
+              <div className="mb-4 rounded-lg border border-primary bg-primary/5 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="font-medium">
+                      {selectedContainerIds.size} Container ausgewählt
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedContainerIds(new Set())}
+                      className="text-xs"
+                    >
+                      Auswahl aufheben
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkBlockContainers}
+                      disabled={actionLoading !== null}
+                    >
+                      <ShieldOff className="mr-2 h-4 w-4" />
+                      Sperren
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkUnblockContainers}
+                      disabled={actionLoading !== null}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Entsperren
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Suche */}
+            <div className="mb-6 flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Container oder User suchen..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button variant="outline" onClick={fetchUsers}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Aktualisieren
+              </Button>
+            </div>
+
+            {/* Container Grid */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {users.flatMap(u =>
+                (u.containers || []).map(container => (
+                  u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  container.container_type.toLowerCase().includes(searchTerm.toLowerCase())
+                ) ? (
+                  <Card
+                    key={container.id}
+                    className={`relative overflow-hidden transition-all ${
+                      container.is_blocked
+                        ? "border-red-500 bg-red-50"
+                        : ""
+                    } ${
+                      selectedContainerIds.has(container.id)
+                        ? "border-primary bg-primary/5"
+                        : ""
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <div className="absolute top-2 left-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedContainerIds.has(container.id)}
+                        onChange={() => toggleContainerSelection(container.id)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </div>
+
+                    {/* Blocked Badge */}
+                    {container.is_blocked && (
+                      <div className="absolute top-2 right-2">
+                        <Badge variant="destructive" className="text-xs">
+                          Gesperrt
+                        </Badge>
+                      </div>
+                    )}
+
+                    <CardHeader className="pt-10">
+                      <CardTitle className="text-lg">{container.container_type}</CardTitle>
+                      <CardDescription className="text-sm">
+                        User: {u.email}
+                      </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Status:</span>
+                          <span className="font-medium">
+                            {container.container_id ? "Running" : "Stopped"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">erstellt:</span>
+                          <span className="font-mono text-xs">
+                            {container.created_at
+                              ? new Date(container.created_at).toLocaleDateString("de-DE")
+                              : "-"}
+                          </span>
+                        </div>
+                        {container.is_blocked && container.blocked_at && (
+                          <div className="flex justify-between text-destructive">
+                            <span className="text-muted-foreground">Gesperrt:</span>
+                            <span className="font-mono text-xs">
+                              {new Date(container.blocked_at).toLocaleString("de-DE")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-2">
+                        {container.is_blocked ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              handleUnblockContainer(container.id, container.container_type)
+                            }
+                            disabled={actionLoading === container.id}
+                            className="flex-1 text-xs"
+                          >
+                            {actionLoading === container.id ? (
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            ) : (
+                              <Shield className="mr-2 h-3 w-3" />
+                            )}
+                            Entsperren
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              handleBlockContainer(container.id, container.container_type)
+                            }
+                            disabled={actionLoading === container.id}
+                            className="flex-1 text-xs"
+                          >
+                            {actionLoading === container.id ? (
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            ) : (
+                              <ShieldOff className="mr-2 h-3 w-3" />
+                            )}
+                            Sperren
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null
+              ))}
+            </div>
+
+            {users.flatMap(u => (u.containers || []).length).reduce((a, b) => a + b, 0) === 0 && (
+              <div className="py-12 text-center text-muted-foreground">
+                Keine Container gefunden
+              </div>
+            )}
+          </>
+        )}
       </main>
     </div>
   );

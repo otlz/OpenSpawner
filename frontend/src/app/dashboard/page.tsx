@@ -20,7 +20,9 @@ import {
   CheckCircle,
   AlertCircle,
   Container as ContainerIcon,
+  ShieldAlert,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -70,7 +72,14 @@ export default function DashboardPage() {
         // Reload Container-Liste
         await loadContainers();
       } else if (apiError) {
-        setError(apiError);
+        // Prüfe auf Blocking-Fehler
+        if (apiError.includes("Administrator")) {
+          toast.error("Dieser Container wurde von einem Administrator gesperrt", {
+            description: "Kontaktiere einen Administrator für mehr Informationen",
+          });
+        } else {
+          setError(apiError);
+        }
       }
     } catch (err) {
       setError("Fehler beim Starten des Containers");
@@ -136,8 +145,26 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
-          {containers.map((container) => (
-            <Card key={container.type} className="relative">
+          {containers.map((container) => {
+            const isBlocked = container.is_blocked === true;  // Phase 7
+
+            return (
+            <Card
+              key={container.type}
+              className={`relative transition-all ${
+                isBlocked ? "border-red-500 bg-red-50" : ""
+              }`}
+            >
+              {/* Blocked Badge */}
+              {isBlocked && (
+                <div className="absolute top-3 right-3">
+                  <Badge variant="destructive" className="text-xs">
+                    <ShieldAlert className="mr-1 h-3 w-3" />
+                    Gesperrt
+                  </Badge>
+                </div>
+              )}
+
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -145,16 +172,26 @@ export default function DashboardPage() {
                       <ContainerIcon className="h-5 w-5" />
                       {container.display_name}
                     </CardTitle>
-                    <CardDescription>{container.description}</CardDescription>
+                    <CardDescription>
+                      {isBlocked ? (
+                        <span className="text-destructive font-semibold">
+                          Dieser Container wurde von einem Administrator gesperrt
+                        </span>
+                      ) : (
+                        container.description
+                      )}
+                    </CardDescription>
                   </div>
-                  {getStatusIcon(container.status)}
+                  {!isBlocked && getStatusIcon(container.status)}
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-sm">
                     <p className="text-muted-foreground">Status:</p>
-                    <p className="font-medium">{getStatusText(container.status)}</p>
+                    <p className="font-medium">
+                      {isBlocked ? "Gesperrt von Admin" : getStatusText(container.status)}
+                    </p>
                   </div>
 
                   {container.last_used && (
@@ -166,8 +203,26 @@ export default function DashboardPage() {
                     </div>
                   )}
 
+                  {isBlocked && container.blocked_at && (
+                    <div className="text-sm text-destructive">
+                      <p className="text-muted-foreground">Gesperrt am:</p>
+                      <p className="font-medium">
+                        {new Date(container.blocked_at).toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
-                    {container.status === "running" ? (
+                    {isBlocked ? (
+                      <Button
+                        className="flex-1"
+                        variant="destructive"
+                        disabled
+                      >
+                        <ShieldAlert className="mr-2 h-4 w-4" />
+                        Gesperrt
+                      </Button>
+                    ) : container.status === "running" ? (
                       <Button
                         className="flex-1"
                         onClick={() =>
@@ -202,7 +257,8 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

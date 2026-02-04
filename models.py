@@ -143,8 +143,14 @@ class UserContainer(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_used = db.Column(db.DateTime)
 
-    # Relationship
+    # Container Blocking (Phase 7)
+    is_blocked = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    blocked_at = db.Column(db.DateTime, nullable=True)
+    blocked_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+
+    # Relationships
     user = db.relationship('User', back_populates='containers')
+    blocker = db.relationship('User', foreign_keys=[blocked_by])
 
     # Unique: Ein User kann nur einen Container pro Typ haben
     __table_args__ = (
@@ -161,7 +167,9 @@ class UserContainer(db.Model):
             'container_port': self.container_port,
             'template_image': self.template_image,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'last_used': self.last_used.isoformat() if self.last_used else None
+            'last_used': self.last_used.isoformat() if self.last_used else None,
+            'is_blocked': self.is_blocked,
+            'blocked_at': self.blocked_at.isoformat() if self.blocked_at else None
         }
 
 

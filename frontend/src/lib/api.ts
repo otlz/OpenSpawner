@@ -111,6 +111,21 @@ export interface Container {
   container_id: string | null;
   created_at: string | null;
   last_used: string | null;
+  is_blocked?: boolean;  // Phase 7: Container Blocking
+  blocked_at?: string | null;  // Phase 7
+}
+
+export interface UserContainer {
+  id: number;
+  user_id: number;
+  container_type: string;
+  container_id: string | null;
+  container_port: number | null;
+  template_image: string;
+  created_at: string | null;
+  last_used: string | null;
+  is_blocked: boolean;  // Phase 7
+  blocked_at: string | null;  // Phase 7
 }
 
 export interface ContainersResponse {
@@ -131,6 +146,8 @@ export interface LaunchResponse {
 export interface AdminUser extends User {
   is_blocked: boolean;
   blocked_at: string | null;
+  container_count?: number;  // Phase 7: Anzahl Containers
+  containers?: UserContainer[];  // Phase 7: Liste aller Containers
 }
 
 export interface AdminUsersResponse {
@@ -288,6 +305,29 @@ export const adminApi = {
     fetchApi<AdminActionResponse>("/api/admin/users/bulk-delete", {
       method: "POST",
       body: JSON.stringify({ user_ids }),
+    }),
+
+  // Container Blocking (Phase 7)
+  blockContainer: (containerId: number) =>
+    fetchApi<{ message: string }>(`/api/admin/containers/${containerId}/block`, {
+      method: "POST",
+    }),
+
+  unblockContainer: (containerId: number) =>
+    fetchApi<{ message: string; info?: string }>(`/api/admin/containers/${containerId}/unblock`, {
+      method: "POST",
+    }),
+
+  bulkBlockContainers: (container_ids: number[]) =>
+    fetchApi<{ message: string; failed: number[] }>(`/api/admin/containers/bulk-block`, {
+      method: "POST",
+      body: JSON.stringify({ container_ids }),
+    }),
+
+  bulkUnblockContainers: (container_ids: number[]) =>
+    fetchApi<{ message: string; failed: number[] }>(`/api/admin/containers/bulk-unblock`, {
+      method: "POST",
+      body: JSON.stringify({ container_ids }),
     }),
 
   // Takeover (Phase 2 - Dummy)
