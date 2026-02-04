@@ -114,13 +114,10 @@ ALTER TABLE user_container ADD COLUMN blocked_by INTEGER REFERENCES user(id) ON 
 ### Step 4: Docker Rebuild
 
 ```bash
-# Frontend neu bauen
-docker-compose down
-
-# Neue Images builden
+# Neue Images bauen (nur geänderte Services)
 docker-compose up -d --build
 
-# Container starten
+# Container-Status prüfen
 docker-compose logs -f spawner
 ```
 
@@ -216,12 +213,12 @@ docker logs spawner | grep "Administrator gesperrt"
 
 ```bash
 # Option 1: Docker Restart (schneller Fix)
-docker-compose down
-docker-compose up -d
+docker-compose restart spawner
 
 # Option 2: Zu letztem Commit zurück
 git revert a4f85df  # Phase 7 Commit
 git push origin main
+docker-compose up -d --build
 
 # Option 3: Database Restore
 docker exec spawner sqlite3 /app/spawner.db \
@@ -229,7 +226,6 @@ docker exec spawner sqlite3 /app/spawner.db \
 
 # Option 4: Vollständiger Rollback
 git reset --hard HEAD~1
-docker-compose down
 docker-compose up -d --build
 ```
 

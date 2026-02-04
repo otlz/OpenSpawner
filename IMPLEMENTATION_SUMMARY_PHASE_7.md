@@ -400,9 +400,8 @@ interface Container {
    npm run build
    ```
 
-5. **Docker neu starten:**
+5. **Docker Rebuild:**
    ```bash
-   docker-compose down
    docker-compose up -d --build
    ```
 
