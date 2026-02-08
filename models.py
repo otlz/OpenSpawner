@@ -38,7 +38,7 @@ class User(UserMixin, db.Model):
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
 
     # Multi-Container Support
-    containers = db.relationship('UserContainer', back_populates='user', cascade='all, delete-orphan')
+    containers = db.relationship('UserContainer', foreign_keys='UserContainer.user_id', back_populates='user', cascade='all, delete-orphan')
 
     @property
     def container_id(self):
