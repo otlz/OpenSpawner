@@ -153,11 +153,9 @@ class UserContainer(db.Model):
 
     # Relationships (explicit primaryjoin wegen mehrerer FKs zu User)
     user = db.relationship('User',
-                          foreign_keys=['user_id'],
                           primaryjoin='UserContainer.user_id==User.id',
                           back_populates='containers')
     blocker = db.relationship('User',
-                             foreign_keys=['blocked_by'],
                              primaryjoin='UserContainer.blocked_by==User.id')
 
     # Unique: Ein User kann nur einen Container pro Typ haben
