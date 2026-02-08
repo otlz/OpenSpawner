@@ -190,7 +190,7 @@ def resend_user_verification(user_id):
 @jwt_required()
 @admin_required()
 def delete_user_container(user_id):
-    """Loescht alle Container eines Benutzers (Multi-Container Support)"""
+    """Loescht spezifische Container eines Benutzers (Multi-Container Support)"""
     admin_id = get_jwt_identity()
     user = User.query.get(user_id)
 
@@ -205,12 +205,30 @@ def delete_user_container(user_id):
             'skipped': True
         }), 200
 
+    # Hole container_ids aus Request-Body falls vorhanden
+    data = request.get_json() or {}
+    container_ids = data.get('container_ids', [])
+
+    # Bestimme welche Container zu löschen sind
+    containers_to_delete = user.containers
+    if container_ids:
+        # Nur die spezifizierten Container löschen
+        containers_to_delete = [c for c in user.containers if c.id in container_ids]
+
+    if not containers_to_delete:
+        return jsonify({
+            'message': 'Keine Container zum Löschen gefunden',
+            'deleted': 0,
+            'failed': [],
+            'skipped': True
+        }), 200
+
     container_mgr = ContainerManager()
     deleted_count = 0
     failed_containers = []
 
-    # Iteriere über alle Container des Users
-    for container in user.containers:
+    # Iteriere über die Container die gelöscht werden sollen
+    for container in containers_to_delete:
         if not container.container_id:
             continue
 

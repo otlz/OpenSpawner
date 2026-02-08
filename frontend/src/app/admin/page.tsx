@@ -216,7 +216,7 @@ export default function AdminPage() {
 
     // Lösche Container pro User
     for (const [userId, containerIds] of containersByUser) {
-      const { data, error } = await adminApi.deleteUserContainer(userId);
+      const { data, error } = await adminApi.deleteUserContainer(userId, containerIds);
 
       if (error) {
         totalFailed += containerIds.length;

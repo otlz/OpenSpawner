@@ -289,9 +289,10 @@ export const adminApi = {
     }),
 
   // Container
-  deleteUserContainer: (id: number) =>
+  deleteUserContainer: (id: number, containerIds?: number[]) =>
     fetchApi<AdminActionResponse>(`/api/admin/users/${id}/container`, {
       method: "DELETE",
+      body: containerIds ? JSON.stringify({ container_ids: containerIds }) : undefined,
     }),
 
   // Delete User
