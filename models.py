@@ -149,7 +149,7 @@ class UserContainer(db.Model):
     blocked_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
 
     # Relationships
-    user = db.relationship('User', back_populates='containers')
+    user = db.relationship('User', foreign_keys=[user_id], back_populates='containers')
     blocker = db.relationship('User', foreign_keys=[blocked_by])
 
     # Unique: Ein User kann nur einen Container pro Typ haben
