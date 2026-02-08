@@ -37,8 +37,12 @@ class User(UserMixin, db.Model):
     # Beziehung fuer blocked_by
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
 
-    # Multi-Container Support
-    containers = db.relationship('UserContainer', foreign_keys='UserContainer.user_id', back_populates='user', cascade='all, delete-orphan')
+    # Multi-Container Support (explicit primaryjoin wegen mehrerer FKs zu User)
+    containers = db.relationship('UserContainer',
+                                foreign_keys='UserContainer.user_id',
+                                primaryjoin='User.id==UserContainer.user_id',
+                                back_populates='user',
+                                cascade='all, delete-orphan')
 
     @property
     def container_id(self):
