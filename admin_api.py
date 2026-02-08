@@ -198,7 +198,12 @@ def delete_user_container(user_id):
         return jsonify({'error': 'User nicht gefunden'}), 404
 
     if not user.containers:
-        return jsonify({'error': 'User hat keine Container'}), 400
+        return jsonify({
+            'message': 'User hat keine Container',
+            'deleted': 0,
+            'failed': [],
+            'skipped': True
+        }), 200
 
     container_mgr = ContainerManager()
     deleted_count = 0
@@ -225,16 +230,12 @@ def delete_user_container(user_id):
 
     current_app.logger.info(f"Admin {admin_id} löschte {deleted_count} Container von User {user.email}")
 
-    if failed_containers:
-        return jsonify({
-            'message': f'{deleted_count} Container gelöscht, {len(failed_containers)} fehlgeschlagen',
-            'failed': failed_containers,
-            'deleted': deleted_count
-        }), 207  # Multi-Status
-
     return jsonify({
-        'message': f'Alle {deleted_count} Container von {user.email} wurden gelöscht',
-        'deleted': deleted_count
+        'message': f'{deleted_count} Container gelöscht' +
+                   (f', {len(failed_containers)} fehlgeschlagen' if failed_containers else ''),
+        'deleted': deleted_count,
+        'failed': failed_containers,
+        'partial_failure': len(failed_containers) > 0
     }), 200
 
 

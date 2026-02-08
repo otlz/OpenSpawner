@@ -34,8 +34,19 @@ import {
   Search,
   Monitor,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type StatusColor = "green" | "yellow" | "red";
 
@@ -114,6 +125,12 @@ export default function AdminPage() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState<"users" | "containers">("users");
   const [selectedContainerIds, setSelectedContainerIds] = useState<Set<number>>(new Set());
+  const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(new Set());
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteDialogData, setDeleteDialogData] = useState<{
+    containerIds: number[];
+    userSummary: { email: string; count: number }[];
+  } | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -129,6 +146,96 @@ export default function AdminPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Expand/Collapse Helper
+  const toggleUserExpand = (userId: number) => {
+    const newExpanded = new Set(expandedUserIds);
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+    }
+    setExpandedUserIds(newExpanded);
+  };
+
+  // Dialog Helper für Bulk-Delete
+  const openBulkDeleteDialog = () => {
+    if (selectedContainerIds.size === 0) {
+      toast.error("Keine Container ausgewählt");
+      return;
+    }
+
+    // Erstelle Zusammenfassung nach User
+    const userMap = new Map<number, { email: string; count: number }>();
+
+    for (const containerId of selectedContainerIds) {
+      const user = users.find(u =>
+        u.containers?.some(c => c.id === containerId)
+      );
+      if (user) {
+        const existing = userMap.get(user.id) || { email: user.email, count: 0 };
+        existing.count++;
+        userMap.set(user.id, existing);
+      }
+    }
+
+    setDeleteDialogData({
+      containerIds: Array.from(selectedContainerIds),
+      userSummary: Array.from(userMap.values())
+    });
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Bestätigte Bulk-Delete
+  const handleConfirmBulkDelete = async () => {
+    if (!deleteDialogData) return;
+
+    setIsDeleteDialogOpen(false);
+    toast.loading(
+      `Lösche ${deleteDialogData.containerIds.length} Container...`,
+      { id: "bulk-delete-containers" }
+    );
+
+    // Gruppiere Container nach User-ID
+    const containersByUser = new Map<number, number[]>();
+
+    for (const containerId of deleteDialogData.containerIds) {
+      const user = users.find(u =>
+        u.containers?.some(c => c.id === containerId)
+      );
+      if (user) {
+        if (!containersByUser.has(user.id)) {
+          containersByUser.set(user.id, []);
+        }
+        containersByUser.get(user.id)!.push(containerId);
+      }
+    }
+
+    let totalDeleted = 0;
+    let totalFailed = 0;
+
+    // Lösche Container pro User
+    for (const [userId, containerIds] of containersByUser) {
+      const { data, error } = await adminApi.deleteUserContainer(userId);
+
+      if (error) {
+        totalFailed += containerIds.length;
+      } else if (data) {
+        // Parse Response-Body (nach Backend-Fix)
+        totalDeleted += data.deleted || 0;
+        totalFailed += (data.failed?.length || 0);
+      }
+    }
+
+    toast.success(`${totalDeleted} Container gelöscht`, {
+      id: "bulk-delete-containers",
+      description: totalFailed > 0 ? `${totalFailed} fehlgeschlagen` : undefined,
+    });
+
+    fetchUsers();
+    setSelectedContainerIds(new Set());
+    setDeleteDialogData(null);
+  };
 
   // Bulk-Selection Helpers
   const toggleUserSelection = (userId: number) => {
@@ -184,23 +291,6 @@ export default function AdminPage() {
       toast.error(`Fehler: ${error}`);
     } else {
       toast.success(data?.message || "Verifizierungs-Email gesendet");
-    }
-    setActionLoading(null);
-  };
-
-  const handleDeleteContainer = async (userId: number, userEmail: string) => {
-    if (!confirm(`Container von "${userEmail}" wirklich loeschen? Der User kann einen neuen Container starten.`)) {
-      return;
-    }
-    setActionLoading(userId);
-    const { data, error } = await adminApi.deleteUserContainer(userId);
-    if (error) {
-      toast.error(`Fehler: ${error}`);
-    } else {
-      toast.success(data?.message || "Container geloescht", {
-        description: data?.deleted ? `${data.deleted} Container entfernt` : undefined,
-      });
-      fetchUsers();
     }
     setActionLoading(null);
   };
@@ -297,43 +387,6 @@ export default function AdminPage() {
 
     toast.success(`${success} User entsperrt`, {
       id: "bulk-unblock",
-      description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
-    });
-
-    fetchUsers();
-    deselectAll();
-  };
-
-  const handleBulkDeleteContainers = async () => {
-    const userList = Array.from(selectedUserIds)
-      .map((id) => users.find((u) => u.id === id)?.email)
-      .filter(Boolean)
-      .join(", ");
-
-    if (!confirm(
-      `Container von ${selectedUserIds.size} Usern löschen?\n\n` +
-      `Betroffene User:\n${userList}\n\n` +
-      `User können danach neue Container erstellen.`
-    )) {
-      return;
-    }
-
-    toast.loading(`Lösche Container von ${selectedUserIds.size} Usern...`, { id: "bulk-delete-containers" });
-
-    let success = 0;
-    let failed = 0;
-
-    for (const userId of selectedUserIds) {
-      const { error } = await adminApi.deleteUserContainer(userId);
-      if (error) {
-        failed++;
-      } else {
-        success++;
-      }
-    }
-
-    toast.success(`${success} User-Container gelöscht`, {
-      id: "bulk-delete-containers",
       description: failed > 0 ? `${failed} fehlgeschlagen` : undefined,
     });
 
@@ -717,15 +770,17 @@ export default function AdminPage() {
                 </Button>
 
                 {/* Bulk-Delete-Container */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkDeleteContainers}
-                  disabled={actionLoading !== null}
-                >
-                  <Container className="mr-2 h-4 w-4" />
-                  Container löschen
-                </Button>
+                {selectedContainerIds.size > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openBulkDeleteDialog}
+                    disabled={actionLoading !== null}
+                  >
+                    <Container className="mr-2 h-4 w-4" />
+                    Container löschen ({selectedContainerIds.size})
+                  </Button>
+                )}
 
                 {/* Bulk-Delete User */}
                 <Button
@@ -805,12 +860,31 @@ export default function AdminPage() {
                 return (
                   <div
                     key={u.id}
-                    className={`flex items-center justify-between rounded-lg border p-4 ${
-                      u.is_blocked ? "bg-red-50 border-red-200" : ""
-                    } ${isSelected ? "bg-primary/5 border-primary" : ""}`}
+                    className="border rounded-lg overflow-hidden"
                   >
+                    {/* Main User Row */}
+                    <div
+                      className={`flex items-center justify-between p-4 ${
+                        u.is_blocked ? "bg-red-50 border-b border-red-200" : "border-b"
+                      } ${isSelected ? "bg-primary/5" : ""}`}
+                    >
                     {/* Checkbox + User Info */}
                     <div className="flex items-center gap-4">
+                      {/* Expand Icon */}
+                      {u.containers && u.containers.length > 0 && (
+                        <button
+                          onClick={() => toggleUserExpand(u.id)}
+                          className="p-0 h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                          title={expandedUserIds.has(u.id) ? "Container ausblenden" : "Container anzeigen"}
+                        >
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              expandedUserIds.has(u.id) ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                      )}
+
                       {isSelectable && (
                         <input
                           type="checkbox"
@@ -909,18 +983,6 @@ export default function AdminPage() {
                             <Mail className="h-4 w-4" />
                           </Button>
 
-                          {/* Container loeschen */}
-                          {u.container_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteContainer(u.id, u.email)}
-                              title="Container loeschen"
-                            >
-                              <Container className="h-4 w-4" />
-                            </Button>
-                          )}
-
                           {/* Takeover (Dummy) */}
                           {u.container_id && !isCurrentUser && (
                             <Button
@@ -974,6 +1036,45 @@ export default function AdminPage() {
                         </>
                       )}
                     </div>
+                    </div>
+
+                    {/* Expandable Container List */}
+                    {expandedUserIds.has(u.id) && u.containers && u.containers.length > 0 && (
+                      <div className="border-t bg-muted/30 p-4">
+                        <div className="space-y-2">
+                          {u.containers.map(container => (
+                            <div
+                              key={container.id}
+                              className="flex items-center gap-3 p-3 rounded border bg-background hover:bg-accent/50 transition-colors"
+                            >
+                              {/* Checkbox für Container */}
+                              <input
+                                type="checkbox"
+                                checked={selectedContainerIds.has(container.id)}
+                                onChange={() => toggleContainerSelection(container.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+
+                              {/* Container Icon + Info */}
+                              <Container className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{container.container_type}</span>
+                                  {container.is_blocked && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      Gesperrt
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {container.container_id ? "Running" : "Stopped"} • {formatDate(container.created_at)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1174,6 +1275,47 @@ export default function AdminPage() {
           </>
         )}
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Container wirklich löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteDialogData && (
+                <>
+                  <p className="mb-3">
+                    Du bist dabei, <strong>{deleteDialogData.containerIds.length} Container</strong> von{" "}
+                    <strong>{deleteDialogData.userSummary.length} Benutzer(n)</strong> zu löschen.
+                  </p>
+                  <div className="mt-3 space-y-1 text-sm bg-muted/50 p-3 rounded">
+                    <p className="font-semibold text-foreground">Betroffene Benutzer:</p>
+                    <ul className="space-y-1 ml-2">
+                      {deleteDialogData.userSummary.map((user, idx) => (
+                        <li key={idx} className="text-sm">
+                          • <span className="font-medium">{user.email}</span> ({user.count} Container)
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Die Benutzer können danach neue Container erstellen.
+                  </p>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Jetzt löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

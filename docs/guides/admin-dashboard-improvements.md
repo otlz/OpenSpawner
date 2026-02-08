@@ -1,7 +1,7 @@
 # Admin-Dashboard: Verbesserte Container- und User-Löschung
 
-**Datum:** 02.02.2026
-**Version:** 2.0
+**Datum:** 08.02.2026 (Update), 02.02.2026 (Initial)
+**Version:** 3.0
 **Status:** ✅ Vollständig implementiert
 
 ---
@@ -14,6 +14,82 @@ Diese Dokumentation beschreibt die Verbesserungen des Admin-Dashboards:
 2. **Toast-Benachrichtigungen** - Modernes UI statt primitiver Alerts
 3. **Bulk-Operations** - Mehrere User gleichzeitig verwalten (Sperren, Löschen, etc.)
 4. **DSGVO-Compliance** - Vollständige Datenlöschung (MagicLinkToken, AdminTakeoverSession)
+5. **✨ NEU (v3.0)**: Expandable Container-Rows + shadcn AlertDialog (08.02.2026)
+
+---
+
+## ✨ Version 3.0: Expandable Rows & AlertDialog (08.02.2026)
+
+### 🎯 Problem (Gelöst)
+
+**Problem I:** Browser-`confirm()` statt echtes Modal
+- Admin konnte nicht einzelne Container auswählen
+- Nur "Alles löschen oder gar nichts" möglich
+- Keine Übersicht der betroffenen Container
+
+**Problem II:** Toast zeigt "0 gelöscht, 1 fehlgeschlagen"
+- **Root Cause**: Backend gab Status 207 zurück
+- Frontend interpretierte Status 207 als Fehler → `response.ok = false`
+- Obwohl Container erfolgreich gelöscht wurden, zählte Frontend sie als "fehlgeschlagen"
+
+### ✅ Lösung Implementiert
+
+#### Backend-Fix (`admin_api.py` Zeile 189-238)
+- Status 207 → **200** (für partielle Erfolge)
+- Status 400 → **200** (für "keine Container")
+- Details im Response-Body: `deleted`, `failed`, `partial_failure`
+- **Begründung**: HTTP-Status sollten Transport-Errors signalisieren, nicht Business-Logic
+
+```python
+# VORHER: Status 207 für Teilerfolge
+return jsonify({...}), 207
+
+# NACHHER: Immer Status 200, Details im Body
+return jsonify({
+    'message': f'{deleted_count} Container gelöscht' +
+               (f', {len(failed_containers)} fehlgeschlagen' if failed_containers else ''),
+    'deleted': deleted_count,
+    'failed': failed_containers,
+    'partial_failure': len(failed_containers) > 0
+}), 200
+```
+
+#### Frontend-Verbesserungen (`frontend/src/app/admin/page.tsx`)
+
+**Expandable User-Rows:**
+- Klick auf User → Container-Liste klappt auf/zu
+- ChevronDown Icon rotiert bei Expand/Collapse
+- Container nur angezeigt wenn User expandiert
+
+**Container-Checkboxen:**
+- Jeder Container hat eine Checkbox
+- Nur ausgewählte Container werden gelöscht
+- Unterstützung für Einzelaus wahl und Bulk-Select
+
+**shadcn AlertDialog (neu):**
+- Echtes Modal statt Browser-`confirm()`
+- Zeigt Zusammenfassung:
+  ```
+  3 Container von 2 Benutzer(n) löschen?
+  • user1@example.com (2 Container)
+  • user2@example.com (1 Container)
+  ```
+- Ja/Nein Buttons mit klarer Bestätigung
+
+**Verbesserte Bulk-Delete-Logik:**
+- Parst `deleted` und `failed` aus Response-Body
+- Akkumuliert Container-Zähler (nicht User-Zähler)
+- Toast zeigt genaue Zahlen: "3 Container gelöscht, 1 fehlgeschlagen"
+
+### 📝 Dateiänderungen
+
+```
+✅ Geänderte Dateien:
+- admin_api.py (Backend-Fix für Status 207)
+- frontend/src/app/admin/page.tsx (UI-Overhaul)
+- frontend/src/components/ui/alert-dialog.tsx (neue Komponente)
+- frontend/package.json (@radix-ui/react-alert-dialog)
+```
 
 ---
 
@@ -410,6 +486,7 @@ with app.app_context():
 
 | Version | Datum | Änderungen |
 |---------|-------|-----------|
+| 3.0 | 08.02.2026 | **Expandable Rows**, shadcn AlertDialog, Status 207→200 Fix, Container-Checkboxen |
 | 2.0 | 02.02.2026 | Multi-Container, Toast-System, Bulk-Operations, DSGVO |
 | 1.0 | ≤01.02.2026 | Ursprüngliches Admin-Dashboard |
 
