@@ -232,7 +232,7 @@ export default function AdminPage() {
       description: totalFailed > 0 ? `${totalFailed} fehlgeschlagen` : undefined,
     });
 
-    fetchUsers();
+    await fetchUsers();
     setSelectedContainerIds(new Set());
     setDeleteDialogData(null);
   };
