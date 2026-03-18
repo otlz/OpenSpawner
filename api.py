@@ -584,9 +584,16 @@ def api_container_launch(container_type):
         # Container existiert - Status prüfen
         try:
             status = container_mgr.get_container_status(user_container.container_id)
+            if status == 'not_found':
+                # Container nicht gefunden - neu erstellen
+                raise Exception(f"Container {user_container.container_id[:12]} nicht mehr vorhanden")
+
             if status != 'running':
                 # Container neu starten
-                container_mgr.start_container(user_container.container_id)
+                start_result = container_mgr.start_container(user_container.container_id)
+                if not start_result:
+                    # Start fehlgeschlagen - neu erstellen
+                    raise Exception(f"Container {user_container.container_id[:12]} konnte nicht gestartet werden")
                 current_app.logger.info(f"[MULTI-CONTAINER] Container {user_container.container_id[:12]} neu gestartet")
 
             # last_used aktualisieren
@@ -594,8 +601,8 @@ def api_container_launch(container_type):
             db.session.commit()
 
         except Exception as e:
-            # Container existiert nicht mehr - neu erstellen
-            current_app.logger.warning(f"Container {user_container.container_id[:12]} nicht gefunden, erstelle neuen: {str(e)}")
+            # Container existiert nicht mehr oder konnte nicht gestartet werden - neu erstellen
+            current_app.logger.warning(f"Container {user_container.container_id[:12]} nicht verfügbar, erstelle neuen: {str(e)}")
             try:
                 template = current_app.config['CONTAINER_TEMPLATES'][container_type]
                 container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, container_type)
