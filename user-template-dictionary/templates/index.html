@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 Mein Wörterbuch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.95;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .header .stats {
+            font-size: 12px;
+            opacity: 0.85;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .alert {
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert.error {
+            background: #ffe0e0;
+            color: #c92a2a;
+            border-left: 4px solid #c92a2a;
+        }
+
+        .alert.success {
+            background: #d3f9d8;
+            color: #2f9e44;
+            border-left: 4px solid #2f9e44;
+        }
+
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 2px solid #e9ecef;
+        }
+
+        .form-section h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+            resize: vertical;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            min-height: 70px;
+            max-height: 150px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            flex: 1;
+            padding: 11px 15px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+            padding: 6px 10px;
+            font-size: 12px;
+            flex: none;
+        }
+
+        .btn-danger:hover {
+            background: #ff5252;
+        }
+
+        .words-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e9ecef;
+        }
+
+        .words-section h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .words-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .word-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 15px;
+            transition: all 0.3s;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .word-card:hover {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+
+        .word-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .word-content .word {
+            font-weight: 700;
+            color: #667eea;
+            font-size: 16px;
+            margin-bottom: 6px;
+            word-wrap: break-word;
+        }
+
+        .word-content .meaning {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 6px;
+            word-wrap: break-word;
+        }
+
+        .word-content .date {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .word-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 50px 20px;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e9ecef;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .count-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+
+        .edit-mode .edit-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .word-card {
+                flex-direction: column;
+            }
+
+            .word-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Mein Wörterbuch</h1>
+            <p>Ihre persönliche Wörter-Sammlung</p>
+            <div class="stats">
+                <span id="wordCount">0</span> Wörter gespeichert
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="alert error" id="errorMsg"></div>
+            <div class="alert success" id="successMsg"></div>
+
+            <div class="form-section">
+                <h2>✍️ Neues Wort hinzufügen</h2>
+                <form id="wordForm">
+                    <div class="form-group">
+                        <label for="word">Wort</label>
+                        <input
+                            type="text"
+                            id="word"
+                            placeholder="z.B. Serendipität"
+                            maxlength="255"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="meaning">Bedeutung</label>
+                        <textarea
+                            id="meaning"
+                            placeholder="z.B. Das glückliche Finden von etwas Ungesucht..."
+                            maxlength="2000"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn-primary">Hinzufügen</button>
+                        <button type="reset" class="btn-secondary">Zurücksetzen</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="words-section">
+                <h2>📖 Ihre Wörter <span class="count-badge" id="countBadge">0</span></h2>
+                <div id="wordsList" class="words-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let words = [];
+        let isLoading = false;
+
+        // DOM Elements
+        const wordForm = document.getElementById('wordForm');
+        const wordInput = document.getElementById('word');
+        const meaningInput = document.getElementById('meaning');
+        const wordsList = document.getElementById('wordsList');
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        const wordCount = document.getElementById('wordCount');
+        const countBadge = document.getElementById('countBadge');
+
+        // Event Listeners
+        wordForm.addEventListener('submit', handleAddWord);
+
+        // Funktionen
+        async function loadWords() {
+            isLoading = true;
+            wordsList.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+            try {
+                const response = await fetch('/api/words');
+                if (!response.ok) throw new Error('Fehler beim Laden');
+
+                const data = await response.json();
+                words = data.words || [];
+                renderWords();
+            } catch (error) {
+                showError('Fehler beim Laden der Wörter: ' + error.message);
+                wordsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Fehler beim Laden</p></div>';
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function renderWords() {
+            updateCount();
+
+            if (words.length === 0) {
+                wordsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📚</div><p>Noch keine Wörter hinzugefügt.</p><p>Fügen Sie oben Ihr erstes Wort hinzu!</p></div>';
+                return;
+            }
+
+            wordsList.innerHTML = words.map(word => `
+                <div class="word-card">
+                    <div class="word-content">
+                        <div class="word">${escapeHtml(word.word)}</div>
+                        <div class="meaning">${escapeHtml(word.meaning)}</div>
+                        <div class="date">${formatDate(word.created_at)}</div>
+                    </div>
+                    <div class="word-actions">
+                        <button class="btn-danger" onclick="deleteWord(${word.id})">Löschen</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function handleAddWord(e) {
+            e.preventDefault();
+
+            const word = wordInput.value.trim();
+            const meaning = meaningInput.value.trim();
+
+            if (!word || !meaning) {
+                showError('Bitte füllen Sie alle Felder aus');
+                return;
+            }
+
+            const btn = wordForm.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Wird gespeichert...';
+
+            try {
+                const response = await fetch('/api/words', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word, meaning })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Fehler beim Speichern');
+                }
+
+                const newWord = await response.json();
+                words.unshift(newWord);
+                renderWords();
+
+                wordForm.reset();
+                wordInput.focus();
+                showSuccess('Wort erfolgreich hinzugefügt! 🎉');
+            } catch (error) {
+                showError('Fehler: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Hinzufügen';
+            }
+        }
+
+        async function deleteWord(id) {
+            if (!confirm('Wort wirklich löschen?')) return;
+
+            try {
+                const response = await fetch(`/api/words/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Fehler beim Löschen');
+                }
+
+                words = words.filter(w => w.id !== id);
+                renderWords();
+                showSuccess('Wort gelöscht!');
+            } catch (error) {
+                showError('Fehler: ' + error.message);
+            }
+        }
+
+        function updateCount() {
+            wordCount.textContent = words.length;
+            countBadge.textContent = words.length;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+
+            // Wenn heute
+            if (diff < 24 * 60 * 60 * 1000) {
+                return date.toLocaleTimeString('de-DE', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            return date.toLocaleDateString('de-DE', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.classList.add('show');
+            setTimeout(() => errorMsg.classList.remove('show'), 5000);
+        }
+
+        function showSuccess(msg) {
+            successMsg.textContent = msg;
+            successMsg.classList.add('show');
+            setTimeout(() => successMsg.classList.remove('show'), 3000);
+        }
+
+        // Initial load
+        loadWords();
+    </script>
+</body>
+</html>

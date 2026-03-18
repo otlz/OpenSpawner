@@ -17,6 +17,12 @@
       "image": "user-template-next:latest",
       "display_name": "Next.js Production",
       "description": "React-Anwendung mit Shadcn/UI, TypeScript und modernem Build-Setup"
+    },
+    {
+      "type": "dictionary",
+      "image": "user-template-dictionary:latest",
+      "display_name": "📚 Wörterbuch",
+      "description": "Persönliches Wörterbuch mit Datenbank - Speichern Sie Wörter und Bedeutungen"
     }
   ]
 }
