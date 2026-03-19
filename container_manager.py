@@ -248,17 +248,24 @@ class ContainerManager:
                 for host, config in volumes.items():
                     print(f"[SPAWNER]   {host} -> {config['bind']}")
 
+            # Environment-Variablen für Container
+            env_vars = {
+                'USER_ID': str(user_id),
+                'USER_SLUG': slug,
+                'CONTAINER_TYPE': container_type,
+                'JWT_SECRET': Config.SECRET_KEY  # Für Token-Validierung im Container
+            }
+
+            # vcoder braucht BASE_PATH für code-server Subpath-Routing
+            if container_type == 'vcoder':
+                env_vars['BASE_PATH'] = f'/{slug_with_suffix}'
+
             container = self._get_client().containers.run(
                 image=image,
                 name=container_name,
                 detach=True,
                 labels=labels,
-                environment={
-                    'USER_ID': str(user_id),
-                    'USER_SLUG': slug,
-                    'CONTAINER_TYPE': container_type,
-                    'JWT_SECRET': Config.SECRET_KEY  # Für Token-Validierung im Container
-                },
+                environment=env_vars,
                 restart_policy={'Name': 'unless-stopped'},
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
                 cpu_quota=Config.DEFAULT_CPU_QUOTA,

@@ -61,6 +61,13 @@ RUN apt-get update && apt-get install -y socat && rm -rf /var/lib/apt/lists/*
 # Entrypoint-Script - startet socat Tunnel + code-server
 RUN printf '#!/bin/bash\n\
 socat TCP-LISTEN:8008,reuseaddr,fork TCP:localhost:9009 &\n\
+# Wenn BASE_PATH nicht gesetzt, nutze "/"\n\
+BASE_PATH="${BASE_PATH:=/}"\n\
+# Ersetze in CMD das --bind-addr mit vollständigen Flags\n\
+if [ "$1" = "code-server" ]; then\n\
+  shift\n\
+  exec code-server "--bind-addr" "0.0.0.0:8080" "--base-path" "$BASE_PATH" "--auth" "none" "$@"\n\
+fi\n\
 exec "$@"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 USER coder
