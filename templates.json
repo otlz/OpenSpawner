@@ -23,6 +23,12 @@
       "image": "user-template-dictionary:latest",
       "display_name": "📚 Wörterbuch",
       "description": "Persönliches Wörterbuch mit Datenbank - Speichern Sie Wörter und Bedeutungen"
+    },
+    {
+      "type": "vcoder",
+      "image": "user-template-vcoder:latest",
+      "display_name": "💻 ESP8266 IDE",
+      "description": "Web-IDE mit PlatformIO für ESP8266/Wemos Entwicklung"
     }
   ]
 }

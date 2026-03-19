@@ -236,6 +236,18 @@ class ContainerManager:
                 if 'traefik' in key:
                     print(f"[SPAWNER]   {key}: {value}")
 
+            # Persistente Volumes für spezifische Container-Typen
+            volumes = {}
+            if container_type == 'vcoder':
+                data_path = f"/data/users/{user_id}/vcoder"
+                volumes = {
+                    f"{data_path}/workspace": {'bind': '/home/coder/project', 'mode': 'rw'},
+                    f"{data_path}/platformio": {'bind': '/home/coder/.platformio', 'mode': 'rw'},
+                }
+                print(f"[SPAWNER] Volumes für vcoder:")
+                for host, config in volumes.items():
+                    print(f"[SPAWNER]   {host} -> {config['bind']}")
+
             container = self._get_client().containers.run(
                 image=image,
                 name=container_name,
@@ -249,7 +261,8 @@ class ContainerManager:
                 },
                 restart_policy={'Name': 'unless-stopped'},
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
-                cpu_quota=Config.DEFAULT_CPU_QUOTA
+                cpu_quota=Config.DEFAULT_CPU_QUOTA,
+                volumes=volumes if volumes else None
             )
 
             # Container an Traefik-Netzwerk verbinden
