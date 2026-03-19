@@ -202,13 +202,22 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
     # WICHTIG: Auf Synology gibt es Berechtigungsbits-Unterschiede (old mode 100644 vs new mode 100755)
     # Diese sind KEINE echten Code-Aenderungen, daher einfach die Remote-Version nehmen
     git fetch origin 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || true
 
-    # Update durchfuehren (nach Reset sollte es funktionieren)
+    # Versuche git pull
     if git pull origin main 2>/dev/null; then
         echo -e "${GREEN}Repository aktualisiert${NC}"
     else
-        echo -e "${YELLOW}Git-Update fehlgeschlagen, fahre mit lokalen Dateien fort...${NC}"
+        echo -e "${YELLOW}Git-Pull fehlgeschlagen, versuche Reset...${NC}"
+        # Wenn pull fehlschlaegt: Berechtigungen korrigieren und Hard Reset machen
+        git config core.filemode false  # Ignoriere Berechtigungsbits
+        git reset --hard HEAD 2>/dev/null || true
+        git fetch origin 2>/dev/null || true
+
+        if git reset --hard origin/main 2>/dev/null; then
+            echo -e "${GREEN}Hard Reset zu origin/main erfolgreich${NC}"
+        else
+            echo -e "${YELLOW}Git-Update fehlgeschlagen, fahre mit lokalen Dateien fort...${NC}"
+        fi
     fi
 else
     echo "Neuinstallation - klone Repository..."
@@ -618,7 +627,24 @@ echo ""
 echo "Alle erforderlichen Images erfolgreich gebaut."
 
 # ============================================================
-# 8. Container starten
+# 8. Alte User-Container aufräumen (Traefik-Konflikt Prävention)
+# ============================================================
+echo ""
+echo "Räume alte User-Container auf..."
+
+# Zähle alte Container
+OLD_CONTAINERS=$(docker ps -a 2>/dev/null | grep -c "user-" || true)
+if [ "$OLD_CONTAINERS" -gt 0 ]; then
+    echo "  Gefunden: ${OLD_CONTAINERS} alte User-Container"
+    # Lösche alle alten User-Container (sauberer Neubau)
+    docker rm -f $(docker ps -a | grep "user-" | awk '{print $1}') 2>/dev/null || true
+    echo -e "  ${GREEN}Alte Container gelöscht${NC}"
+else
+    echo "  Keine alten Container vorhanden"
+fi
+
+# ============================================================
+# 9. Container starten
 # ============================================================
 echo ""
 echo "Starte Container..."
