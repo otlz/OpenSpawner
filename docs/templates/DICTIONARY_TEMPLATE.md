@@ -410,6 +410,78 @@ Falls die Anwendung wächst:
 
 ---
 
+## 🔒 Sicherheit & Authentifizierung
+
+### JWT-Cookie Validierung
+
+Das Dictionary-Template ist **obligatorisch geschützt** mit JWT-Token-Validierung:
+
+1. **HttpOnly Cookie `spawner_token`** wird vom Spawner gesetzt
+2. **Vor jedem API-Request** wird der Token validiert
+3. **Ohne gültigen Token: 403 Forbidden**
+
+### How It Works
+
+```
+User Login
+   ↓
+Spawner setzt HttpOnly Cookie: spawner_token=<JWT>
+   ↓
+Browser sendet Cookie automatisch bei jedem Request
+   ↓
+Dictionary-Template validiert JWT in: app.before_request()
+   ↓
+Gültig? → Erlauben API-Zugriff
+Ungültig? → 403 Forbidden (Authentifizierung erforderlich)
+```
+
+### Implementation Details
+
+**Token-Validierung in `app.py`:**
+```python
+@app.before_request
+def validate_jwt_token():
+    # Öffentliche Endpoints (GET / und /health)
+    if request.path == '/' or request.path == '/health':
+        return
+
+    # Alle API-Calls brauchen gültigen JWT
+    token = request.cookies.get('spawner_token')
+    if not token:
+        return jsonify({'error': 'Authentifizierung erforderlich'}), 401
+
+    # Dekodiere und validiere JWT
+    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+    g.user_id = payload.get('sub')
+```
+
+### Sicherheits-Features
+
+- ✅ **HttpOnly Cookies** - JavaScript kann Token nicht auslesen
+- ✅ **Secure Flag** - Nur über HTTPS übertragen
+- ✅ **SameSite=Lax** - CSRF-Schutz
+- ✅ **Token Expiration** - Standard: 1 Stunde (konfigurierbar)
+- ✅ **JWT_SECRET** - Wird vom Spawner übergeben
+- ✅ **Logout** - Cookie wird beim Logout gelöscht
+
+### Testing der Sicherheit
+
+```bash
+# 1. Versuche direkten Zugriff OHNE Login
+curl https://spawner.wieland.org/e220dd278a12-template-dictionary/api/words
+# → Sollte 401 Unauthorized zurückgeben
+
+# 2. Nach erfolgreichem Login
+curl -b "spawner_token=<JWT>" https://spawner.wieland.org/e220dd278a12-template-dictionary/api/words
+# → Sollte Wörter-Liste zurückgeben
+
+# 3. Überprüfe Cookie im Browser
+# Browser DevTools → Application → Cookies
+# → spawner_token sollte HttpOnly markiert sein
+```
+
+---
+
 ## Troubleshooting
 
 ### Problem: "Datenbankfehler beim Abrufen"

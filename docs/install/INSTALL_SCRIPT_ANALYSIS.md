@@ -1082,6 +1082,65 @@ df -h /volume1/docker/
 
 ---
 
+## Neue Features (März 2026)
+
+### 1. Git-Pull Auto-Fix für Synology
+
+**Problem:** `git pull` schlägt fehl wegen Dateiberechtigungen.
+
+**Lösung:**
+```bash
+git config core.filemode false  # Ignoriere Berechtigungsbits
+git reset --hard origin/main    # Force-Sync mit Remote
+```
+
+**Automatisch aktiviert** wenn `git pull` fehlschlägt.
+
+### 2. Update-and-Re-Exec Mechanism
+
+**Problem:** Wenn `install.sh` selbst aktualisiert wird, lädt bash die alte Version weiter.
+
+**Lösung:**
+```bash
+# Vor git pull: Checksumme von install.sh speichern
+BEFORE_HASH=$(md5sum install.sh)
+
+# Nach git pull: Checksumme vergleichen
+AFTER_HASH=$(md5sum install.sh)
+
+# Wenn geändert: Script mit exec neu starten
+if [ "$BEFORE_HASH" != "$AFTER_HASH" ]; then
+    export ALREADY_REEXECED="true"
+    exec bash install.sh  # Neu starten mit neuem Code
+fi
+```
+
+### 3. Alte User-Container Cleanup
+
+**Problem:** Nach Code-Updates bleiben alte Container und verursachen Traefik-Konflikte.
+
+**Lösung:** Automatisches Löschen aller alten User-Container vor Docker-Compose Restart.
+
+```bash
+# Phase 8 in install.sh
+docker ps -a | grep "user-" | awk '{print $NF}'  # Zeige Container-Namen
+docker rm -f $(docker ps -a | grep "user-" | awk '{print $1}')  # Lösche alle
+```
+
+**Ausgabe:**
+```
+Räume alte User-Container auf...
+  Gefunden: 3 alte User-Container:
+    • user-e220dd278a12-template-dictionary-1
+    • user-abc123-template-01-2
+    • user-xyz789-template-next-3
+
+  Lösche Container...
+  ✓ Alle alten Container gelöscht
+```
+
+---
+
 ## Häufige Fragen
 
 **F: Kann ich install.sh mehrmals hintereinander ausführen?**
