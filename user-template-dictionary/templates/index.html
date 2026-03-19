@@ -419,6 +419,9 @@
     </div>
 
     <script>
+        // API Base Path (einbeziehen aktuellen Pfad für Traefik Routing)
+        const apiBase = window.location.pathname.replace(/\/$/, '');
+
         // State Management
         let words = [];
         let isLoading = false;
@@ -442,7 +445,7 @@
             wordsList.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
             try {
-                const response = await fetch('/api/words');
+                const response = await fetch(`${apiBase}/api/words`);
                 if (!response.ok) throw new Error('Fehler beim Laden');
 
                 const data = await response.json();
@@ -494,7 +497,7 @@
             btn.textContent = 'Wird gespeichert...';
 
             try {
-                const response = await fetch('/api/words', {
+                const response = await fetch(`${apiBase}/api/words`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -526,7 +529,7 @@
             if (!confirm('Wort wirklich löschen?')) return;
 
             try {
-                const response = await fetch(`/api/words/${id}`, {
+                const response = await fetch(`${apiBase}/api/words/${id}`, {
                     method: 'DELETE'
                 });
 
