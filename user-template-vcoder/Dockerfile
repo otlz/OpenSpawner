@@ -56,11 +56,28 @@ USER root
 RUN rm -f /tmp/cpptools.vsix /tmp/platformio.vsix
 
 # socat für Port-Tunneling installieren (PIO Home reverse proxy)
-RUN apt-get update && apt-get install -y socat && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y socat nginx && rm -rf /var/lib/apt/lists/*
 
-# Entrypoint-Script - startet socat Tunnel + code-server
+# nginx als Reverse Proxy für code-server (fixiert Subpath-Routing)
+RUN printf 'server {\n\
+    listen 8080;\n\
+    server_name localhost;\n\
+    location / {\n\
+        proxy_pass http://localhost:8081;\n\
+        proxy_http_version 1.1;\n\
+        proxy_set_header Upgrade $http_upgrade;\n\
+        proxy_set_header Connection "upgrade";\n\
+        proxy_set_header Host $host;\n\
+        proxy_set_header X-Real-IP $remote_addr;\n\
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
+        proxy_set_header X-Forwarded-Proto $scheme;\n\
+    }\n\
+}\n' > /etc/nginx/sites-available/default && rm -f /etc/nginx/sites-enabled/default
+
+# Entrypoint-Script - startet nginx + socat + code-server
 RUN printf '#!/bin/bash\n\
 socat TCP-LISTEN:8008,reuseaddr,fork TCP:localhost:9009 &\n\
+nginx -g "daemon off;" &\n\
 exec "$@"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 USER coder
@@ -68,4 +85,4 @@ USER coder
 WORKDIR /home/coder/project
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "none"]
+CMD ["code-server", "--bind-addr", "127.0.0.1:8081", "--auth", "none"]
