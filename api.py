@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, current_app, redirect
+from flask import Blueprint, jsonify, request, current_app, redirect, make_response
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
@@ -21,6 +21,34 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Token-Blacklist für Logout
 token_blacklist = set()
+
+
+def create_auth_response(access_token, user_data, expires_in):
+    """Erstellt eine JSON-Response mit JWT-Token als HttpOnly Cookie"""
+    response_data = {
+        'access_token': access_token,
+        'token_type': 'Bearer',
+        'expires_in': expires_in,
+        'user': user_data
+    }
+
+    response = make_response(jsonify(response_data))
+
+    # Setze JWT als HttpOnly Cookie
+    # HttpOnly verhindert JavaScript-Zugriff
+    # Secure: nur über HTTPS
+    # SameSite: CSRF-Schutz
+    response.set_cookie(
+        'spawner_token',
+        access_token,
+        max_age=expires_in,
+        httponly=True,
+        secure=True,  # Nur über HTTPS
+        samesite='Lax',  # CSRF-Schutz
+        path='/'  # Für alle Pfade verfügbar
+    )
+
+    return response
 
 
 @api_bp.route('/auth/login', methods=['POST'])
@@ -252,19 +280,16 @@ def api_verify_signup():
 
     current_app.logger.info(f"[SIGNUP] User {user.email} erfolgreich registriert")
 
-    return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': int(expires.total_seconds()),
-        'user': {
-            'id': user.id,
-            'email': user.email,
-            'slug': user.slug,
-            'is_admin': user.is_admin,
-            'state': user.state,
-            'container_id': user.container_id
-        }
-    }), 200
+    user_data = {
+        'id': user.id,
+        'email': user.email,
+        'slug': user.slug,
+        'is_admin': user.is_admin,
+        'state': user.state,
+        'container_id': user.container_id
+    }
+
+    return create_auth_response(access_token, user_data, int(expires.total_seconds())), 200
 
 
 @api_bp.route('/auth/verify-login', methods=['GET'])
@@ -351,28 +376,30 @@ def api_verify_login():
 
     current_app.logger.info(f"[LOGIN] User {user.email} erfolgreich eingeloggt")
 
-    return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': int(expires.total_seconds()),
-        'user': {
-            'id': user.id,
-            'email': user.email,
-            'slug': user.slug,
-            'is_admin': user.is_admin,
-            'state': user.state,
-            'container_id': user.container_id
-        }
-    }), 200
+    user_data = {
+        'id': user.id,
+        'email': user.email,
+        'slug': user.slug,
+        'is_admin': user.is_admin,
+        'state': user.state,
+        'container_id': user.container_id
+    }
+
+    return create_auth_response(access_token, user_data, int(expires.total_seconds())), 200
 
 
 @api_bp.route('/auth/logout', methods=['POST'])
 @jwt_required()
 def api_logout():
-    """API-Logout - invalidiert Token"""
+    """API-Logout - invalidiert Token und löscht Cookie"""
     jti = get_jwt()['jti']
     token_blacklist.add(jti)
-    return jsonify({'message': 'Erfolgreich abgemeldet'}), 200
+
+    # Erstelle Response und lösche Cookie
+    response = make_response(jsonify({'message': 'Erfolgreich abgemeldet'}))
+    response.delete_cookie('spawner_token', path='/')
+
+    return response, 200
 
 
 @api_bp.route('/user/me', methods=['GET'])

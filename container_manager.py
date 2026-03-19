@@ -69,7 +69,8 @@ class ContainerManager:
                 labels=labels,
                 environment={
                     'USER_ID': str(user_id),
-                    'USER_SLUG': slug
+                    'USER_SLUG': slug,
+                    'JWT_SECRET': Config.SECRET_KEY  # Für Token-Validierung im Container
                 },
                 restart_policy={'Name': 'unless-stopped'},
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
@@ -243,7 +244,8 @@ class ContainerManager:
                 environment={
                     'USER_ID': str(user_id),
                     'USER_SLUG': slug,
-                    'CONTAINER_TYPE': container_type
+                    'CONTAINER_TYPE': container_type,
+                    'JWT_SECRET': Config.SECRET_KEY  # Für Token-Validierung im Container
                 },
                 restart_policy={'Name': 'unless-stopped'},
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,

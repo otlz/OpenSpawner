@@ -3,11 +3,12 @@ Persönliches Wörterbuch - Flask Backend mit SQLite
 Speichert Wörter und Bedeutungen in einer persistenten Datenbank pro Benutzer
 """
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, g
 from datetime import datetime
 import sqlite3
 import os
 import logging
+import jwt
 
 app = Flask(__name__)
 
@@ -57,6 +58,49 @@ def init_db():
         logger.info("[DICTIONARY] Table 'words' already exists")
 
     conn.close()
+
+
+# ============================================================
+# JWT-Token Validierung
+# ============================================================
+JWT_SECRET = os.getenv('JWT_SECRET', 'secret-key-from-spawner')  # Sollte vom Spawner gesetzt werden
+
+def validate_jwt_token():
+    """Validiere JWT-Token aus Cookie - wird vor jedem Request ausgeführt"""
+    # GET / ist öffentlich (index.html laden)
+    if request.path == '/' and request.method == 'GET':
+        return
+
+    # GET /health ist öffentlich (Health Check)
+    if request.path == '/health' and request.method == 'GET':
+        return
+
+    # Alle anderen Endpoints brauchen gültigen JWT-Token im Cookie
+    token = request.cookies.get('spawner_token')
+
+    if not token:
+        return jsonify({'error': 'Authentifizierung erforderlich - kein Token'}), 401
+
+    try:
+        # Dekodiere und validiere JWT
+        # Hinweis: Der Secret-Key muss mit dem Spawner synchron sein!
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        # Speichere User-ID im g-Object für API-Endpunkte
+        g.user_id = payload.get('sub')  # 'sub' ist die Standard-Claim für User-ID
+        logger.info(f"[DICTIONARY] Token validiert für User {g.user_id}")
+    except jwt.ExpiredSignatureError:
+        logger.warning("[DICTIONARY] JWT-Token abgelaufen")
+        return jsonify({'error': 'Token abgelaufen - bitte neu anmelden'}), 401
+    except jwt.InvalidTokenError as e:
+        logger.warning(f"[DICTIONARY] Ungültiger JWT-Token: {str(e)}")
+        return jsonify({'error': 'Ungültiger Token - authentifizieren erforderlich'}), 401
+    except Exception as e:
+        logger.error(f"[DICTIONARY] Token-Validierungsfehler: {str(e)}")
+        return jsonify({'error': 'Authentifizierungsfehler'}), 500
+
+
+# Registriere before_request Handler
+app.before_request(validate_jwt_token)
 
 
 @app.route('/')
