@@ -59,20 +59,27 @@ RUN rm -f /tmp/cpptools.vsix /tmp/platformio.vsix
 RUN apt-get update && apt-get install -y socat nginx && rm -rf /var/lib/apt/lists/*
 
 # nginx als Reverse Proxy für code-server (fixiert Subpath-Routing)
-RUN printf 'server {\n\
-    listen 8080;\n\
-    server_name localhost;\n\
-    location / {\n\
-        proxy_pass http://localhost:8081;\n\
-        proxy_http_version 1.1;\n\
-        proxy_set_header Upgrade $http_upgrade;\n\
-        proxy_set_header Connection "upgrade";\n\
-        proxy_set_header Host $host;\n\
-        proxy_set_header X-Real-IP $remote_addr;\n\
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
-        proxy_set_header X-Forwarded-Proto $scheme;\n\
+RUN printf 'daemon off;\n\
+pid /tmp/nginx.pid;\n\
+events { worker_connections 1024; }\n\
+http {\n\
+    access_log /tmp/nginx-access.log;\n\
+    error_log /tmp/nginx-error.log;\n\
+    server {\n\
+        listen 8080;\n\
+        server_name localhost;\n\
+        location / {\n\
+            proxy_pass http://127.0.0.1:8081;\n\
+            proxy_http_version 1.1;\n\
+            proxy_set_header Upgrade $http_upgrade;\n\
+            proxy_set_header Connection "upgrade";\n\
+            proxy_set_header Host $host;\n\
+            proxy_set_header X-Real-IP $remote_addr;\n\
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
+            proxy_set_header X-Forwarded-Proto $scheme;\n\
+        }\n\
     }\n\
-}\n' > /etc/nginx/sites-available/default && rm -f /etc/nginx/sites-enabled/default
+}\n' > /etc/nginx/nginx.conf
 
 # Entrypoint-Script - startet nginx + socat + code-server
 RUN printf '#!/bin/bash\n\
