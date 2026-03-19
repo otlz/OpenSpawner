@@ -282,6 +282,29 @@ class ContainerManager:
                 container.remove(force=True)
                 raise Exception(f"Konnte Container nicht an Netzwerk '{Config.TRAEFIK_NETWORK}' verbinden: {str(e)}")
 
+            # Warte bis Container bereit ist (Health-Check)
+            print(f"[SPAWNER] Warte auf Container-Startup...")
+            import time
+            max_retries = 30  # 30 Sekunden max
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    container.reload()  # Aktualisiere Container-Status
+                    if container.status == 'running':
+                        # Container läuft - warte noch 2 Sekunden für Service-Startup
+                        print(f"[SPAWNER] Container läuft, warte 2 Sekunden auf Service-Startup...")
+                        time.sleep(2)
+                        print(f"[SPAWNER] Container bereit!")
+                        break
+                except Exception as e:
+                    print(f"[SPAWNER] Fehler beim Status-Check: {str(e)}")
+
+                retry_count += 1
+                time.sleep(1)
+
+            if retry_count >= max_retries:
+                print(f"[SPAWNER] WARNUNG: Container wurde nicht bereit nach {max_retries}s")
+
             print(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
             print(f"[SPAWNER] URL: {Config.PREFERRED_URL_SCHEME}://{base_host}/{slug_with_suffix}")
             return container.id, 8080
