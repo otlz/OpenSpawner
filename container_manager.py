@@ -37,6 +37,8 @@ class ContainerManager:
                     f'Host(`{base_host}`) && PathPrefix(`/{slug}`)',
                 f'traefik.http.routers.user{user_id}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
                 f'traefik.http.routers.user{user_id}.priority': '100',
+                # Router muss zum Service zeigen
+                f'traefik.http.routers.user{user_id}.service': f'user{user_id}',
                 # StripPrefix Middleware - entfernt /{slug} bevor Container Request erhält
                 f'traefik.http.routers.user{user_id}.middlewares': f'user{user_id}-strip',
                 f'traefik.http.middlewares.user{user_id}-strip.stripprefix.prefixes': f'/{slug}',
@@ -44,7 +46,7 @@ class ContainerManager:
                 f'traefik.http.routers.user{user_id}.tls': 'true',
                 f'traefik.http.routers.user{user_id}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
 
-                # Service
+                # Service mit Port-Konfiguration
                 f'traefik.http.services.user{user_id}.loadbalancer.server.port': '8080',
 
                 # Metadata
@@ -181,6 +183,8 @@ class ContainerManager:
                     f'Host(`{base_host}`) && PathPrefix(`/{slug_with_suffix}`)',
                 f'traefik.http.routers.user{user_id}-{container_type}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
                 f'traefik.http.routers.user{user_id}-{container_type}.priority': '100',
+                # Router muss zum Service zeigen
+                f'traefik.http.routers.user{user_id}-{container_type}.service': f'user{user_id}-{container_type}',
                 # StripPrefix Middleware - entfernt /{slug_with_suffix} bevor Container Request erhält
                 f'traefik.http.routers.user{user_id}-{container_type}.middlewares': f'user{user_id}-{container_type}-strip',
                 f'traefik.http.middlewares.user{user_id}-{container_type}-strip.stripprefix.prefixes': f'/{slug_with_suffix}',
@@ -188,7 +192,7 @@ class ContainerManager:
                 f'traefik.http.routers.user{user_id}-{container_type}.tls': 'true',
                 f'traefik.http.routers.user{user_id}-{container_type}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
 
-                # Service
+                # Service mit Port-Konfiguration
                 f'traefik.http.services.user{user_id}-{container_type}.loadbalancer.server.port': '8080',
 
                 # Metadata
