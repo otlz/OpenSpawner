@@ -38,6 +38,7 @@ def create_auth_response(access_token, user_data, expires_in):
     # HttpOnly verhindert JavaScript-Zugriff
     # Secure: nur über HTTPS
     # SameSite: CSRF-Schutz
+    # Domain: Verfügbar für alle Subpfade und Subdomains
     response.set_cookie(
         'spawner_token',
         access_token,
@@ -45,7 +46,8 @@ def create_auth_response(access_token, user_data, expires_in):
         httponly=True,
         secure=True,  # Nur über HTTPS
         samesite='Lax',  # CSRF-Schutz
-        path='/'  # Für alle Pfade verfügbar
+        path='/',  # Für alle Pfade verfügbar
+        domain=f".{Config.BASE_DOMAIN}"  # Für alle Subpfade und Subdomains
     )
 
     return response
