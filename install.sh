@@ -9,6 +9,16 @@ set -e
 REPO_URL="https://gitea.iotxs.de/RainerWieland/spawner.git"
 RAW_URL="https://gitea.iotxs.de/RainerWieland/spawner/raw/branch/main"
 INSTALL_DIR="${PWD}"
+
+# ============================================================
+# UPDATE & RE-EXEC: Wenn install.sh aktualisiert wird, neu starten
+# ============================================================
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if [ -f "${SCRIPT_PATH}" ]; then
+    # Speichere Checksumme VOR git pull
+    BEFORE_HASH=$(md5sum "${SCRIPT_PATH}" 2>/dev/null | awk '{print $1}' || echo "")
+    ALREADY_REEXECED="${ALREADY_REEXECED:-false}"
+fi
 # VERSION automatisch aus Git-Tags bestimmen (z.B. v0.1.0, v0.2.1)
 # Fallback auf "dev" wenn keine Tags vorhanden
 VERSION=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo "dev")
@@ -217,6 +227,21 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
             echo -e "${GREEN}Hard Reset zu origin/main erfolgreich${NC}"
         else
             echo -e "${YELLOW}Git-Update fehlgeschlagen, fahre mit lokalen Dateien fort...${NC}"
+        fi
+    fi
+
+    # ============================================================
+    # Prüfe ob install.sh selbst aktualisiert wurde - wenn ja, neu starten
+    # ============================================================
+    if [ "${ALREADY_REEXECED}" = "false" ] && [ -f "${SCRIPT_PATH}" ]; then
+        AFTER_HASH=$(md5sum "${SCRIPT_PATH}" 2>/dev/null | awk '{print $1}' || echo "")
+        if [ -n "${BEFORE_HASH}" ] && [ -n "${AFTER_HASH}" ] && [ "${BEFORE_HASH}" != "${AFTER_HASH}" ]; then
+            echo ""
+            echo -e "${BLUE}install.sh wurde aktualisiert - starte Skript neu...${NC}"
+            sleep 1
+            export ALREADY_REEXECED="true"
+            exec bash "${SCRIPT_PATH}"
+            exit $?
         fi
     fi
 else
