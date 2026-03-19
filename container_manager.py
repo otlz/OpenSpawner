@@ -189,33 +189,30 @@ class ContainerManager:
                 'spawner.managed': 'true'
             }
 
-            # Prüfe ob Container bereits existiert (z.B. nach Fehler oder fehlgeschlagener Löschung)
+            # Lösche ALLE alten Container mit gleicher user_id und container_type (B)
+            # Dies verhindert Traefik Router-Konflikte mit mehreren Containern gleicher Config
             try:
-                existing_container = self._get_client().containers.get(container_name)
-                print(f"[SPAWNER] Container {container_name} existiert bereits (Status: {existing_container.status})")
-
-                if existing_container.status == 'running':
-                    # Container läuft bereits
-                    return existing_container.id, 8080
-                else:
-                    # Container gestoppt - versuche zu starten
-                    try:
-                        existing_container.start()
-                        print(f"[SPAWNER] Existierender Container {container_name} neu gestartet")
-                        return existing_container.id, 8080
-                    except Exception as e:
-                        # Container kann nicht gestartet werden - lösche ihn und erstelle neuen
-                        print(f"[SPAWNER] Kann Container nicht starten, lösche: {str(e)}")
+                filters = {
+                    'label': [
+                        f'spawner.user_id={user_id}',
+                        f'spawner.container_type={container_type}'
+                    ]
+                }
+                old_containers = self._get_client().containers.list(all=True, filters=filters)
+                for old_container in old_containers:
+                    if old_container.status == 'running':
                         try:
-                            existing_container.remove(force=True)
-                            print(f"[SPAWNER] Alten Container {container_name} gelöscht - erstelle neuen")
-                            # Fahre fort um neuen Container zu erstellen
-                        except Exception as remove_err:
-                            print(f"[SPAWNER] WARNUNG: Kann alten Container nicht löschen: {str(remove_err)}")
-                            # Fahre trotzdem fort und versuche neuen zu erstellen
-            except docker.errors.NotFound:
-                # Container existiert nicht - das ist normal, weiterfahren
-                pass
+                            old_container.stop(timeout=5)
+                            print(f"[SPAWNER] Alter Container {old_container.name} gestoppt")
+                        except Exception as e:
+                            print(f"[SPAWNER] WARNUNG: Kann alten Container nicht stoppen: {str(e)}")
+                    try:
+                        old_container.remove(force=True)
+                        print(f"[SPAWNER] Alter Container {old_container.name} gelöscht (Traefik-Konflikt-Prävention)")
+                    except Exception as e:
+                        print(f"[SPAWNER] WARNUNG: Kann alten Container nicht löschen: {str(e)}")
+            except Exception as e:
+                print(f"[SPAWNER] WARNUNG: Fehler beim Löschen alter Container: {str(e)}")
 
             # Logging: Traefik-Labels ausgeben
             print(f"[SPAWNER] Creating {container_type} container user-{slug}-{container_type}-{user_id}")
