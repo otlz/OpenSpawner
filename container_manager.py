@@ -256,10 +256,6 @@ class ContainerManager:
                 'JWT_SECRET': Config.SECRET_KEY  # Für Token-Validierung im Container
             }
 
-            # vcoder braucht BASE_PATH für code-server Subpath-Routing
-            if container_type == 'vcoder':
-                env_vars['BASE_PATH'] = f'/{slug_with_suffix}'
-
             container = self._get_client().containers.run(
                 image=image,
                 name=container_name,
