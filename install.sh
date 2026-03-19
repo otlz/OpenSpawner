@@ -657,15 +657,23 @@ echo "Alle erforderlichen Images erfolgreich gebaut."
 echo ""
 echo "Räume alte User-Container auf..."
 
-# Zähle alte Container
-OLD_CONTAINERS=$(docker ps -a 2>/dev/null | grep -c "user-" || true)
-if [ "$OLD_CONTAINERS" -gt 0 ]; then
-    echo "  Gefunden: ${OLD_CONTAINERS} alte User-Container"
-    # Lösche alle alten User-Container (sauberer Neubau)
+# Liste und lösche alte Container mit detaillierter Ausgabe
+OLD_CONTAINER_LIST=$(docker ps -a 2>/dev/null | grep "user-" | awk '{print $NF}' || true)
+OLD_CONTAINER_COUNT=$(echo "$OLD_CONTAINER_LIST" | grep -c . || true)
+
+if [ "$OLD_CONTAINER_COUNT" -gt 0 ]; then
+    echo -e "  ${YELLOW}Gefunden: ${OLD_CONTAINER_COUNT} alte User-Container:${NC}"
+    echo "$OLD_CONTAINER_LIST" | while read container_name; do
+        [ -z "$container_name" ] && continue
+        echo "    • $container_name"
+    done
+
+    echo ""
+    echo "  Lösche Container..."
     docker rm -f $(docker ps -a | grep "user-" | awk '{print $1}') 2>/dev/null || true
-    echo -e "  ${GREEN}Alte Container gelöscht${NC}"
+    echo -e "  ${GREEN}✓ Alle alten Container gelöscht${NC}"
 else
-    echo "  Keine alten Container vorhanden"
+    echo "  ✓ Keine alten Container vorhanden"
 fi
 
 # ============================================================
