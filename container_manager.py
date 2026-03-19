@@ -64,7 +64,6 @@ class ContainerManager:
                 Config.USER_TEMPLATE_IMAGE,
                 name=f"user-{slug}-{user_id}",
                 detach=True,
-                network=Config.TRAEFIK_NETWORK,
                 labels=labels,
                 environment={
                     'USER_ID': str(user_id),
@@ -74,6 +73,16 @@ class ContainerManager:
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
                 cpu_quota=Config.DEFAULT_CPU_QUOTA
             )
+
+            # Container an Traefik-Netzwerk verbinden
+            try:
+                network = self._get_client().networks.get(Config.TRAEFIK_NETWORK)
+                network.connect(container)
+                print(f"[SPAWNER] Container an Netzwerk '{Config.TRAEFIK_NETWORK}' verbunden")
+            except Exception as e:
+                print(f"[SPAWNER] WARNUNG: Container konnte nicht an Netzwerk verbunden werden: {str(e)}")
+                container.remove(force=True)
+                raise Exception(f"Konnte Container nicht an Netzwerk '{Config.TRAEFIK_NETWORK}' verbinden: {str(e)}")
 
             print(f"[SPAWNER] Container created: {container.id[:12]}")
             print(f"[SPAWNER] URL: https://{base_host}/{slug}")
@@ -226,7 +235,6 @@ class ContainerManager:
                 image=image,
                 name=container_name,
                 detach=True,
-                network=Config.TRAEFIK_NETWORK,
                 labels=labels,
                 environment={
                     'USER_ID': str(user_id),
@@ -237,6 +245,16 @@ class ContainerManager:
                 mem_limit=Config.DEFAULT_MEMORY_LIMIT,
                 cpu_quota=Config.DEFAULT_CPU_QUOTA
             )
+
+            # Container an Traefik-Netzwerk verbinden
+            try:
+                network = self._get_client().networks.get(Config.TRAEFIK_NETWORK)
+                network.connect(container)
+                print(f"[SPAWNER] Container an Netzwerk '{Config.TRAEFIK_NETWORK}' verbunden")
+            except Exception as e:
+                print(f"[SPAWNER] WARNUNG: Container konnte nicht an Netzwerk verbunden werden: {str(e)}")
+                container.remove(force=True)
+                raise Exception(f"Konnte Container nicht an Netzwerk '{Config.TRAEFIK_NETWORK}' verbinden: {str(e)}")
 
             print(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
             print(f"[SPAWNER] URL: {Config.PREFERRED_URL_SCHEME}://{base_host}/{slug_with_suffix}")
