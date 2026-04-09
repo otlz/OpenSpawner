@@ -1,3 +1,6 @@
 # Ensure shell scripts always have LF line endings (required for Docker)
 *.sh text eol=lf
 entrypoint.sh text eol=lf
+
+# Templates are vendored container images, not core project code
+templates/** linguist-vendored
