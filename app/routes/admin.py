@@ -5,9 +5,9 @@ All endpoints require admin privileges.
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from models import db, User, UserState, AdminTakeoverSession, MagicLinkToken, UserContainer
-from decorators import admin_required
-from container_manager import ContainerManager
+from app.models import db, User, UserState, AdminTakeoverSession, MagicLinkToken, UserContainer
+from app.decorators import admin_required
+from app.services.container_manager import ContainerManager
 from config import Config
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -152,8 +152,7 @@ def unblock_user(user_id):
 @admin_required()
 def resend_user_verification(user_id):
     """Resend magic link to a user (admin function)"""
-    from email_service import generate_magic_link_token, send_magic_link_email
-    from models import MagicLinkToken
+    from app.services.email_service import generate_magic_link_token, send_magic_link_email
 
     user = User.query.get(user_id)
 
@@ -587,7 +586,6 @@ def debug_management():
             return jsonify({'error': 'Required parameter: email'}), 400
 
         try:
-            from models import MagicLinkToken
             user = User.query.filter_by(email=email).first()
             if not user:
                 return jsonify({'error': f'User {email} not found'}), 404

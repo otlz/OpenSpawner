@@ -424,11 +424,11 @@ if [ -z "$USER_TEMPLATE_IMAGES" ]; then
     echo ""
 
     BUILT_TEMPLATES=0
-    TEMPLATE_DIRS=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
+    TEMPLATE_DIRS=$(find "${INSTALL_DIR}/templates" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
     TOTAL_BUILDS=$((2 + TEMPLATE_DIRS))
     BUILD_STEP=$((BUILD_STEP + 1))
 
-    for template_dir in "${INSTALL_DIR}"/user-template*; do
+    for template_dir in "${INSTALL_DIR}"/templates/user-template*; do
         [ -d "$template_dir" ] || continue
         template_name=$(basename "$template_dir")
         image_name="${template_name}:latest"
@@ -574,7 +574,7 @@ else
     echo "  Prüfe auf ungekonfigurierte Template-Verzeichnisse..."
     UNUSED_COUNT=0
 
-    for template_dir in "${INSTALL_DIR}"/user-template*; do
+    for template_dir in "${INSTALL_DIR}"/templates/user-template*; do
         [ -d "$template_dir" ] || continue
         template_name=$(basename "$template_dir")
 

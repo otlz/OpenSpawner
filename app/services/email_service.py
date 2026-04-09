@@ -42,7 +42,7 @@ def check_rate_limit(email: str) -> bool:
     Returns:
         True if OK, False if rate limit reached
     """
-    from models import User, MagicLinkToken
+    from app.models import User, MagicLinkToken
 
     user = User.query.filter_by(email=email).first()
     if not user:

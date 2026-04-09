@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -21,8 +21,11 @@ function VerifyLoginContent() {
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState("");
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
+    if (verifiedRef.current) return;
+
     const token = searchParams.get("token");
 
     if (!token) {
@@ -31,43 +34,25 @@ function VerifyLoginContent() {
       return;
     }
 
+    verifiedRef.current = true;
+
     const verify = async () => {
-      const maxRetries = 5;
-      const retryDelay = 2000;
-      const maxTimeout = 10000;
+      const result = await verifyLogin(token);
 
-      let attempt = 0;
-      const startTime = Date.now();
-
-      while (attempt < maxRetries) {
-        if (Date.now() - startTime > maxTimeout) {
-          setStatus("error");
-          setError("Login timed out. Please try again.");
-          return;
-        }
-
-        const result = await verifyLogin(token);
-
-        if (result.success) {
-          setStatus("success");
-          setTimeout(() => {
-            router.push("/dashboard");
-          }, 1000);
-          return;
-        }
-
-        attempt++;
-        if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-        }
+      if (result.success) {
+        setStatus("success");
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1000);
+      } else {
+        setStatus("error");
+        setError("Login failed. Please request a new link.");
       }
-
-      setStatus("error");
-      setError("Login failed. Please request a new link.");
     };
 
     verify();
-  }, [searchParams, verifyLogin, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/50 p-4">

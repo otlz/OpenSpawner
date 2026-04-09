@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { adminApi, AdminUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -24,13 +22,11 @@ import {
   Trash2,
   Mail,
   RefreshCw,
-  LogOut,
   Loader2,
   CheckCircle2,
   XCircle,
   AlertCircle,
   Clock,
-  ArrowLeft,
   Search,
   Monitor,
   X,
@@ -114,8 +110,7 @@ function formatDate(dateString: string | null | undefined) {
 }
 
 export default function AdminPage() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
+  const { user } = useAuth();
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -555,11 +550,6 @@ export default function AdminPage() {
     setSelectedContainerIds(new Set());
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.push("/login");
-  };
-
   // Gefilterte Users
   const filteredUsers = users.filter(
     (u) =>
@@ -578,51 +568,14 @@ export default function AdminPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-muted/50">
-      {/* Header */}
-      <header className="border-b bg-background">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Dashboard
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Shield className="h-6 w-6 text-primary" />
-              <span className="text-lg font-semibold">Admin</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="text-xs">
-                  {user?.email.slice(0, 1).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium">{user?.email}</span>
-              <Badge variant="secondary" className="text-xs">
-                Admin
-              </Badge>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Abmelden
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto p-4 md:p-8">
+    <>
         <div className="mb-8">
           <h1 className="text-3xl font-bold">
             {activeTab === "users" ? "Benutzerverwaltung" : "Container-Verwaltung"}
@@ -1274,7 +1227,6 @@ export default function AdminPage() {
             )}
           </>
         )}
-      </main>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -1316,6 +1268,6 @@ export default function AdminPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

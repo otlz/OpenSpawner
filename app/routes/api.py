@@ -6,9 +6,9 @@ from flask_jwt_extended import (
     get_jwt
 )
 from datetime import timedelta, datetime
-from models import db, User, UserState, MagicLinkToken, UserContainer
-from container_manager import ContainerManager
-from email_service import (
+from app.models import db, User, UserState, MagicLinkToken, UserContainer
+from app.services.container_manager import ContainerManager
+from app.services.email_service import (
     generate_slug_from_email,
     generate_magic_link_token,
     send_magic_link_email,

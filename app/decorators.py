@@ -4,7 +4,7 @@ Decorators for access control
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-from models import User
+from app.models import User
 
 
 def admin_required():
@@ -52,7 +52,7 @@ def verified_required():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            from models import UserState
+            from app.models import UserState
 
             verify_jwt_in_request()
             user_id = get_jwt_identity()

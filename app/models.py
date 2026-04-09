@@ -1,10 +1,7 @@
-from flask_sqlalchemy import SQLAlchemy
+from app.extensions import db
 from flask_login import UserMixin
 from datetime import datetime
 from enum import Enum
-
-
-db = SQLAlchemy()
 
 
 class UserState(Enum):

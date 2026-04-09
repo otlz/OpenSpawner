@@ -19,8 +19,8 @@ services:
     volumes:
       - .env:/app/.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:rw
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - spawner-data:/app/data
+      - spawner-logs:/app/logs
 
     environment:
       - TRAEFIK_ENABLED=false
@@ -72,29 +72,33 @@ services:
 
   # User container templates (built once, spawned per user)
   template-01:
-    build: ./user-template-01
+    build: ./templates/user-template-01
     image: user-template-01:latest
     profiles: ["build"]
 
   template-02:
-    build: ./user-template-02
+    build: ./templates/user-template-02
     image: user-template-02:latest
     profiles: ["build"]
 
   template-next:
-    build: ./user-template-next
+    build: ./templates/user-template-next
     image: user-template-next:latest
     profiles: ["build"]
 
   template-dictionary:
-    build: ./user-template-dictionary
+    build: ./templates/user-template-dictionary
     image: user-template-dictionary:latest
     profiles: ["build"]
 
   template-vcoder:
-    build: ./user-template-vcoder
+    build: ./templates/user-template-vcoder
     image: user-template-vcoder:latest
     profiles: ["build"]
+
+volumes:
+  spawner-data:
+  spawner-logs:
 
 networks:
   openspawner:
