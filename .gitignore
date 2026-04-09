@@ -68,6 +68,10 @@ out/
 build/
 dist/
 
+# Root-level package files (shadcn CLI artifact)
+/package.json
+/package-lock.json
+
 # Package Manager Logs
 npm-debug.log*
 yarn-debug.log*

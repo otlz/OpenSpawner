@@ -1,126 +1,125 @@
 # OpenSpawner
 
-A Flask + Next.js application that automatically provisions isolated Docker containers per user. Each user gets their own container with a personalized URL, managed through a web dashboard.
+Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutzer bereitstellt. Jeder Benutzer bekommt eigene Container mit personalisierter URL, verwaltet ueber ein Web-Dashboard.
 
-## What It Does
+## Was macht OpenSpawner?
 
-- Users register via passwordless magic link authentication
-- Each user can launch one or more Docker containers from pre-built templates
-- Containers are automatically routed and accessible via the web
-- Admins can manage users, block/unblock accounts, and monitor containers
+- Benutzer registrieren sich per Magic Link (passwortlos, kein Passwort noetig)
+- Jeder Benutzer kann Docker-Container aus fertigen Templates starten
+- Container sind automatisch per Web erreichbar
+- Admins verwalten Benutzer und Container ueber ein Dashboard
 
-## Quick Start (Docker Desktop)
+## Schnellstart (Docker Desktop)
+
+Funktioniert auf **Windows** und **Linux** gleich — Docker Desktop muss installiert sein.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/OpenSpawner.git
+git clone https://github.com/otlz/OpenSpawner.git
 cd OpenSpawner
 cp .env.example .env
-docker compose --profile build build   # build user container templates
-docker compose up --build              # start the application
+docker compose --profile build build   # Template-Images bauen
+docker compose up --build              # Anwendung starten
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Dann oeffnen: [http://localhost:3000](http://localhost:3000)
 
-> The first user to register automatically becomes an admin.
+> **Wichtig:** Der erste registrierte Benutzer wird automatisch Admin.
 
-> **Note:** Magic link emails require SMTP configuration. For local development without email, check the backend logs (`docker compose logs spawner`) to find the magic link URL.
+> **Ohne E-Mail-Server:** Magic Links erscheinen in den Backend-Logs:
+> ```bash
+> docker compose logs spawner
+> ```
 
-## Architecture
+## Architektur
 
 ```
 Browser
   |
   +---> Frontend (Next.js)     :3000
   |       |
-  |       +---> /api/* proxy
+  |       +---> /api/* Proxy
   |               |
   +---> Backend (Flask API)    :5000
           |
           +---> Docker Engine
                   |
-                  +---> User Container A  :random-port
-                  +---> User Container B  :random-port
+                  +---> User Container A
+                  +---> User Container B
                   +---> ...
 ```
 
-**Tech Stack:**
-- **Backend:** Flask, SQLAlchemy, JWT Auth, Docker SDK
-- **Frontend:** Next.js 14, TypeScript, Tailwind CSS, Radix UI
-- **Database:** SQLite (default), PostgreSQL (production)
-- **Auth:** Passwordless magic links + JWT tokens
+**Tech-Stack:**
 
-## Configuration
+| Komponente | Technologie |
+|------------|-------------|
+| Backend | Flask, SQLAlchemy, JWT Auth, Docker SDK |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS, Radix UI |
+| Datenbank | SQLite (Standard) |
+| Auth | Passwortlose Magic Links + JWT Tokens |
 
-All settings are in `.env` (copy from `.env.example`). Key variables:
+## Konfiguration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | `dev-secret-...` | Flask secret key (change in production!) |
-| `BASE_DOMAIN` | `localhost` | Your domain |
-| `TRAEFIK_ENABLED` | `false` | Enable Traefik reverse proxy mode |
-| `USER_TEMPLATE_IMAGES` | all templates | Semicolon-separated list of templates to build |
-| `DEFAULT_MEMORY_LIMIT` | `512m` | RAM limit per user container |
-| `DEFAULT_CPU_QUOTA` | `50000` | CPU quota (50000 = 0.5 CPU) |
+Alle Einstellungen in `.env` (Vorlage: `.env.example`). Die wichtigsten:
 
-See [.env.example](.env.example) for all options.
+| Variable | Standard | Beschreibung |
+|----------|----------|-------------|
+| `SECRET_KEY` | `dev-secret-...` | Flask Secret Key (in Produktion aendern!) |
+| `BASE_DOMAIN` | `localhost` | Domain |
+| `TRAEFIK_ENABLED` | `false` | Traefik Reverse Proxy aktivieren |
+| `USER_TEMPLATE_IMAGES` | alle Templates | Semikolon-getrennte Liste der Templates |
+| `DEFAULT_MEMORY_LIMIT` | `512m` | RAM-Limit pro Container |
+| `DEFAULT_CPU_QUOTA` | `50000` | CPU-Limit (50000 = 0.5 CPU) |
 
-## User Templates
+Alle Optionen sind in [.env.example](.env.example) dokumentiert.
 
-OpenSpawner ships with pre-built container templates:
+## Templates
 
-| Template | Description |
+OpenSpawner kommt mit fertigen Container-Templates:
+
+| Template | Beschreibung |
 |----------|-------------|
-| `user-template-01` | Nginx Basic - simple static site |
+| `user-template-01` | Nginx Basic — einfache statische Seite |
 | `user-template-02` | Nginx Advanced |
-| `user-template-next` | Next.js React application |
-| `user-template-dictionary` | Python Flask dictionary app |
-| `user-template-vcoder` | Web IDE with PlatformIO for ESP8266 |
+| `user-template-next` | Next.js React-Anwendung |
+| `user-template-dictionary` | Python Flask Dictionary App |
+| `user-template-vcoder` | Web IDE mit PlatformIO fuer ESP8266 |
 
-### Adding a Custom Template
+### Eigenes Template erstellen
 
-1. Create a directory `user-template-myname/` with a `Dockerfile` (must expose port 8080)
-2. Add the image to `USER_TEMPLATE_IMAGES` in `.env`
-3. Add metadata to `templates.json`
-4. Rebuild: `docker compose up --build`
+1. Verzeichnis `templates/user-template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
+2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufuegen
+3. Metadaten in `templates.json` eintragen
+4. Bauen: `docker compose --profile build build`
 
-## Production Deployment (with Traefik)
+## Produktion (mit Traefik)
 
-For production with HTTPS and domain-based routing:
+Fuer Produktion mit HTTPS und Domain-Routing:
 
 ```bash
-# Set up your .env for production
-BASE_DOMAIN=yourdomain.com
+# In .env anpassen:
+BASE_DOMAIN=deine-domain.de
 SPAWNER_SUBDOMAIN=coder
 TRAEFIK_ENABLED=true
 TRAEFIK_NETWORK=web
+TRAEFIK_CERTRESOLVER=lets-encrypt
+TRAEFIK_ENTRYPOINT=websecure
+```
 
-# Use the production compose file
+```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-This requires a running [Traefik](https://traefik.io/) instance with Docker provider enabled.
+Voraussetzung: Ein laufender [Traefik](https://traefik.io/) Reverse Proxy mit Docker Provider.
 
-## Development
+## API-Dokumentation
 
-```bash
-# Backend (Flask)
-pip install -r requirements.txt
-python app.py
+Swagger UI ist verfuegbar unter [http://localhost:5000/swagger](http://localhost:5000/swagger).
 
-# Frontend (Next.js)
-cd frontend
-npm install
-npm run dev
+## Autoren
 
-# Linting
-ruff check .          # Backend
-cd frontend && npm run lint  # Frontend
-```
+- **Rainer Wieland** — Karl Kuebel Schule Bensheim
+- **Navin Dass** — Karl Kuebel Schule Bensheim
 
-## API Documentation
+## Lizenz
 
-When running, Swagger UI is available at [http://localhost:5000/swagger](http://localhost:5000/swagger).
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
+MIT — siehe [LICENSE](LICENSE)

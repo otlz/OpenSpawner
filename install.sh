@@ -3,11 +3,11 @@ set -e
 
 # ============================================================
 # OpenSpawner - Installation Script
-# https://github.com/YOUR_USERNAME/OpenSpawner
+# https://github.com/otlz/OpenSpawner
 # ============================================================
 
-REPO_URL="https://github.com/YOUR_USERNAME/OpenSpawner.git"
-RAW_URL="https://raw.githubusercontent.com/YOUR_USERNAME/OpenSpawner/main"
+REPO_URL="https://github.com/otlz/OpenSpawner.git"
+RAW_URL="https://raw.githubusercontent.com/otlz/OpenSpawner/main"
 INSTALL_DIR="${PWD}"
 
 # ============================================================
