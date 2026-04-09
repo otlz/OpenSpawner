@@ -1,0 +1,105 @@
+# OpenSpawner - Production Docker Compose (with Traefik)
+#
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
+# Requires: Running Traefik instance and external Docker network
+#
+# Configure via .env file (see .env.example)
+
+services:
+  # Flask API Backend
+  spawner:
+    build: .
+    container_name: spawner
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"  # Optional: direct access for debugging
+
+    volumes:
+      - .env:/app/.env:ro
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    environment:
+      - TRAEFIK_ENABLED=true
+
+    networks:
+      - web
+
+    labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+
+      # API router (higher priority for /api/*)
+      - "traefik.http.routers.spawner-api.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.spawner-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-api.priority=200"
+      - "traefik.http.routers.spawner-api.service=spawner-api-service"
+      - "traefik.http.services.spawner-api-service.loadbalancer.server.port=5000"
+
+      # Health router
+      - "traefik.http.routers.spawner-health.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/health`)"
+      - "traefik.http.routers.spawner-health.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-health.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-health.priority=100"
+      - "traefik.http.routers.spawner-health.service=spawner-api-service"
+
+      # Metadata
+      - "spawner.managed=true"
+      - "spawner.version=2.0.0"
+      - "spawner.type=api-service"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Next.js Frontend
+  frontend:
+    build: ./frontend
+    container_name: spawner-frontend
+    restart: unless-stopped
+
+    environment:
+      - NEXT_PUBLIC_API_URL=
+
+    networks:
+      - web
+
+    labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+
+      # Frontend router (lower priority - catch-all)
+      - "traefik.http.routers.spawner-frontend.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.spawner-frontend.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.spawner-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
+      - "traefik.http.routers.spawner-frontend.priority=50"
+      - "traefik.http.routers.spawner-frontend.service=spawner-frontend-service"
+      - "traefik.http.services.spawner-frontend-service.loadbalancer.server.port=3000"
+
+      # Metadata
+      - "spawner.managed=true"
+      - "spawner.version=2.0.0"
+      - "spawner.type=frontend-service"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    depends_on:
+      - spawner
+
+# External network (must exist, created by Traefik)
+networks:
+  web:
+    external: true

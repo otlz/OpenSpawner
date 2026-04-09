@@ -14,14 +14,14 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-# Flask-App initialisieren
+# Initialize Flask app
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Datenbank initialisieren
+# Initialize database
 db.init_app(app)
 
-# CORS initialisieren
+# Initialize CORS
 CORS(app, resources={
     r"/api/*": {
         "origins": app.config.get('CORS_ORIGINS', ['http://localhost:3000']),
@@ -31,10 +31,10 @@ CORS(app, resources={
     }
 })
 
-# JWT initialisieren
+# Initialize JWT
 jwt = JWTManager(app)
 
-# Swagger/OpenAPI initialisieren
+# Initialize Swagger/OpenAPI
 swagger_config = {
     "headers": [],
     "specs": [
@@ -48,8 +48,8 @@ swagger_config = {
     "static_url_path": "/flasgger_static",
     "swagger_ui": True,
     "specs_route": "/swagger",
-    "title": "Container Spawner API",
-    "description": "API für Container-Spawner mit Admin-Debug-Endpoints",
+    "title": "OpenSpawner API",
+    "description": "REST API for OpenSpawner with admin debug endpoints",
     "version": "2.0.0",
     "termsOfService": "",
     "contact": {
@@ -64,27 +64,27 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
-    return jsonify({'error': 'Token abgelaufen'}), 401
+    return jsonify({'error': 'Token expired'}), 401
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
-    return jsonify({'error': 'Ungültiger Token'}), 401
+    return jsonify({'error': 'Invalid token'}), 401
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
-    return jsonify({'error': 'Authentifizierung erforderlich'}), 401
+    return jsonify({'error': 'Authentication required'}), 401
 
 # ========================================
-# Logging konfigurieren
+# Configure logging
 # ========================================
 log_file = app.config.get('LOG_FILE', '/app/logs/spawner.log')
 log_dir = os.path.dirname(log_file)
 
-# Erstelle Log-Verzeichnis falls nicht vorhanden
+# Create log directory if it doesn't exist
 if log_dir and not os.path.exists(log_dir):
     os.makedirs(log_dir, exist_ok=True)
 
-# Rotating File Handler (max 10MB pro Datei, 5 Backups)
+# Rotating File Handler (max 10MB per file, 5 backups)
 if log_file:
     file_handler = RotatingFileHandler(
         log_file,
@@ -97,26 +97,26 @@ if log_file:
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
 
-# Flask-Login initialisieren
+# Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
-login_manager.login_message = 'Bitte melde dich an, um auf diese Seite zuzugreifen.'
+login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'error'
 
-# Blueprints registrieren
+# Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(admin_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Lädt User für Flask-Login"""
+    """Load user for Flask-Login"""
     return User.query.get(int(user_id))
 
 @app.route('/')
 def index():
-    """Startseite - Redirect zu Dashboard oder Login"""
+    """Homepage - redirect to dashboard or login"""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return redirect(url_for('auth.login'))
@@ -124,14 +124,14 @@ def index():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Dashboard - zeigt Container-Status und Service-URL"""
+    """Dashboard - shows container status and service URL"""
     container_mgr = ContainerManager()
     container_status = 'unknown'
 
     if current_user.container_id:
         container_status = container_mgr.get_container_status(current_user.container_id)
 
-    # Service-URL für den User (pfad-basiert)
+    # Service URL for user (path-based)
     scheme = app.config['PREFERRED_URL_SCHEME']
     spawner_domain = f"{app.config['SPAWNER_SUBDOMAIN']}.{app.config['BASE_DOMAIN']}"
     service_url = f"{scheme}://{spawner_domain}/{current_user.slug}"
@@ -144,17 +144,17 @@ def dashboard():
 @app.route('/container/restart')
 @login_required
 def restart_container():
-    """Startet Container des Users neu"""
+    """Restart user's container"""
     container_mgr = ContainerManager()
     
-    # Alten Container stoppen falls vorhanden
+    # Stop old container if exists
     if current_user.container_id:
         container_mgr.stop_container(current_user.container_id)
         container_mgr.remove_container(current_user.container_id)
     
-    # Neuen Container starten - Multi-Container kompatibel
+    # Start new container - multi-container compatible
     try:
-        # Nutze spawn_multi_container für Primary Container
+        # Use spawn_multi_container for primary container
         default_template = list(app.config['CONTAINER_TEMPLATES'].keys())[0]
         container_id, port = container_mgr.spawn_multi_container(current_user.id, current_user.slug, default_template)
         if current_user.containers:
@@ -162,25 +162,25 @@ def restart_container():
             current_user.containers[0].container_port = port
         db.session.commit()
     except Exception as e:
-        app.logger.error(f"Container-Restart fehlgeschlagen: {str(e)}")
+        app.logger.error(f"Container restart failed: {str(e)}")
     
     return redirect(url_for('dashboard'))
 
 @app.route('/health')
 def health():
-    """Health-Check für Docker und Monitoring"""
+    """Health check for Docker and monitoring"""
     db_status = 'ok'
     docker_status = 'warning'
 
     try:
-        # DB-Check (KRITISCH)
+        # DB check (CRITICAL)
         db.session.execute(text('SELECT 1'))
     except Exception as e:
         db_status = f'error: {str(e)}'
         app.logger.error(f"Database health check failed: {str(e)}")
 
     try:
-        # Docker-Check (OPTIONAL)
+        # Docker check (OPTIONAL)
         container_mgr = ContainerManager()
         container_mgr._get_client().ping()
         docker_status = 'ok'
@@ -188,7 +188,7 @@ def health():
         docker_status = f'warning: {str(e)}'
         app.logger.warning(f"Docker health check failed (non-critical): {str(e)}")
 
-    # Status 503 nur wenn DATABASE down ist, nicht wenn Docker down ist
+    # Return 503 only if DATABASE is down, not if Docker is down
     status_code = 200 if db_status == 'ok' else 503
 
     response = {
@@ -205,10 +205,10 @@ def health():
 
     return response, status_code
 
-# Datenbank-Tabellen erstellen beim ersten Start
+# Create database tables on first start
 with app.app_context():
     db.create_all()
-    app.logger.info('Datenbank-Tabellen erstellt')
+    app.logger.info('Database tables created')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

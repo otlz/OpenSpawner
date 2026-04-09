@@ -2,12 +2,12 @@
 set -e
 
 # ============================================================
-# Container Spawner - Installationsskript
-# https://gitea.iotxs.de/RainerWieland/spawner
+# OpenSpawner - Installation Script
+# https://github.com/YOUR_USERNAME/OpenSpawner
 # ============================================================
 
-REPO_URL="https://gitea.iotxs.de/RainerWieland/spawner.git"
-RAW_URL="https://gitea.iotxs.de/RainerWieland/spawner/raw/branch/main"
+REPO_URL="https://github.com/YOUR_USERNAME/OpenSpawner.git"
+RAW_URL="https://raw.githubusercontent.com/YOUR_USERNAME/OpenSpawner/main"
 INSTALL_DIR="${PWD}"
 
 # ============================================================
@@ -85,7 +85,7 @@ version_gte() {
 
 echo ""
 echo "============================================================"
-echo "  Container Spawner Installation v${VERSION}"
+echo "  OpenSpawner Installation v${VERSION}"
 echo "============================================================"
 echo ""
 

@@ -7,8 +7,8 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Container Spawner",
-  description: "Dein persönlicher Container-Service",
+  title: "OpenSpawner",
+  description: "Your personal container service",
 };
 
 export default function RootLayout({

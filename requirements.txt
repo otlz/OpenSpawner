@@ -8,6 +8,5 @@ werkzeug==3.0.1
 docker==6.1.0
 requests==2.28.0
 urllib3==1.26.12
-requests-unixsocket>=0.3.0
 PyJWT==2.8.0
 python-dotenv==1.0.0

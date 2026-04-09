@@ -1,5 +1,5 @@
 """
-Email-Service fuer Verifizierungs-Emails und Magic Links
+Email service for verification emails and magic links
 """
 import smtplib
 import secrets
@@ -11,14 +11,14 @@ from datetime import datetime, timedelta
 
 
 def generate_verification_token():
-    """Generiert einen sicheren Verifizierungs-Token"""
+    """Generate a secure verification token"""
     return secrets.token_urlsafe(32)
 
 
 def generate_slug_from_email(email: str) -> str:
     """
-    Generiert eindeutigen Slug aus Email
-    Format: Erste 12 Zeichen von SHA256(email)
+    Generate unique slug from email.
+    Format: First 12 characters of SHA256(email)
     """
     email_lower = email.lower().strip()
     hash_obj = hashlib.sha256(email_lower.encode())
@@ -28,25 +28,25 @@ def generate_slug_from_email(email: str) -> str:
 
 def generate_magic_link_token() -> str:
     """
-    Generiert sicheren Token für Magic Links
-    32 Byte = ~43 Zeichen URL-safe Base64
+    Generate secure token for magic links.
+    32 bytes = ~43 characters URL-safe Base64
     """
     return secrets.token_urlsafe(32)
 
 
 def check_rate_limit(email: str) -> bool:
     """
-    Prüft ob User zu viele Magic Links angefordert hat
-    Max. 3 Tokens pro Email in den letzten 60 Minuten
+    Check if user has requested too many magic links.
+    Max 3 tokens per email in the last 60 minutes.
 
     Returns:
-        True wenn OK, False wenn Rate Limit erreicht
+        True if OK, False if rate limit reached
     """
     from models import User, MagicLinkToken
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        return True  # Neue Email, kein Limit
+        return True  # New email, no limit
 
     one_hour_ago = datetime.utcnow() - timedelta(hours=1)
     recent_tokens = MagicLinkToken.query.filter(
@@ -59,27 +59,32 @@ def check_rate_limit(email: str) -> bool:
 
 def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
     """
-    Sendet Magic Link Email
+    Send magic link email.
 
     Args:
-        email: Empfänger-Email
-        token: Magic Link Token
-        token_type: 'signup' oder 'login'
+        email: Recipient email
+        token: Magic link token
+        token_type: 'signup' or 'login'
 
     Returns:
-        True bei Erfolg, False bei Fehler
+        True on success, False on error
     """
-    # URL basierend auf Type
+    # In local dev mode, use localhost:3000 for the frontend URL
+    frontend_url = Config.FRONTEND_URL
+    if Config.BASE_DOMAIN == 'localhost':
+        frontend_url = 'http://localhost:3000'
+
+    # URL based on type
     if token_type == 'signup':
-        verify_url = f"{Config.FRONTEND_URL}/verify-signup?token={token}"
-        subject = "Registrierung abschließen - Container Spawner"
-        action_text = "Registrierung abschließen"
-        greeting = "Vielen Dank für deine Registrierung!"
+        verify_url = f"{frontend_url}/verify-signup?token={token}"
+        subject = "Complete Registration - OpenSpawner"
+        action_text = "Complete Registration"
+        greeting = "Thank you for registering!"
     else:  # login
-        verify_url = f"{Config.FRONTEND_URL}/verify-login?token={token}"
-        subject = "Login-Link - Container Spawner"
-        action_text = "Jetzt einloggen"
-        greeting = "Hier ist dein Login-Link:"
+        verify_url = f"{frontend_url}/verify-login?token={token}"
+        subject = "Login Link - OpenSpawner"
+        action_text = "Log In Now"
+        greeting = "Here is your login link:"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -98,22 +103,22 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
     <body>
         <div class="container">
             <div class="header">
-                <h1>Container Spawner</h1>
+                <h1>OpenSpawner</h1>
             </div>
             <div class="content">
                 <p>{greeting}</p>
-                <p>Klicke auf den Button, um fortzufahren:</p>
+                <p>Click the button below to continue:</p>
                 <p style="text-align: center;">
                     <a href="{verify_url}" class="button">{action_text}</a>
                 </p>
-                <p>Oder kopiere diesen Link in deinen Browser:</p>
+                <p>Or copy this link into your browser:</p>
                 <p style="word-break: break-all; background: #eee; padding: 10px; border-radius: 3px;">
                     {verify_url}
                 </p>
-                <p><small>Dieser Link ist 15 Minuten gültig und kann nur einmal verwendet werden.</small></p>
+                <p><small>This link is valid for 15 minutes and can only be used once.</small></p>
             </div>
             <div class="footer">
-                <p>Diese Email wurde automatisch generiert. Bitte antworte nicht darauf.</p>
+                <p>This email was generated automatically. Please do not reply.</p>
             </div>
         </div>
     </body>
@@ -123,14 +128,14 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
     text_content = f"""
     {greeting}
 
-    Bitte öffne folgenden Link oder kopiere ihn in deinen Browser:
+    Please open the following link or copy it into your browser:
 
     {verify_url}
 
-    Hinweis: Dieser Link ist 15 Minuten gültig und kann nur einmal verwendet werden.
+    Note: This link is valid for 15 minutes and can only be used once.
 
     ---
-    Diese Email wurde automatisch generiert.
+    This email was generated automatically.
     """
 
     msg = MIMEMultipart('alternative')
@@ -142,6 +147,14 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
     part2 = MIMEText(html_content, 'html', 'utf-8')
     msg.attach(part1)
     msg.attach(part2)
+
+    # In local dev mode (no SMTP configured), just log the URL
+    if not Config.SMTP_USER or Config.BASE_DOMAIN == 'localhost':
+        print(f"[EMAIL] ========================================", flush=True)
+        print(f"[EMAIL] MAGIC LINK for {email} ({token_type}):", flush=True)
+        print(f"[EMAIL] {verify_url}", flush=True)
+        print(f"[EMAIL] ========================================", flush=True)
+        return True
 
     try:
         if Config.SMTP_USE_TLS:
@@ -156,9 +169,10 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
         server.sendmail(Config.SMTP_FROM, email, msg.as_string())
         server.quit()
 
-        print(f"[EMAIL] Magic Link ({token_type}) gesendet an {email}")
+        print(f"[EMAIL] Magic link ({token_type}) sent to {email}")
         return True
 
     except Exception as e:
-        print(f"[EMAIL] Fehler beim Senden der Email an {email}: {str(e)}")
+        print(f"[EMAIL] Error sending email to {email}: {str(e)}")
+        print(f"[EMAIL] Fallback - use this link: {verify_url}")
         return False

@@ -1,6 +1,6 @@
 """
-Admin-API Blueprint
-Alle Endpoints erfordern Admin-Rechte.
+Admin API Blueprint
+All endpoints require admin privileges.
 """
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -17,13 +17,13 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 @jwt_required()
 @admin_required()
 def get_users():
-    """Listet alle Benutzer auf (mit Container-Info für Phase 7)"""
+    """List all users (with container info for Phase 7)"""
     users = User.query.all()
 
     users_list = []
     for user in users:
         user_dict = user.to_dict()
-        # Füge Container-Info hinzu (Phase 7)
+        # Add container info (Phase 7)
         user_dict['container_count'] = len(user.containers)
         user_dict['containers'] = [c.to_dict() for c in user.containers]
         users_list.append(user_dict)
@@ -38,13 +38,13 @@ def get_users():
 @jwt_required()
 @admin_required()
 def get_user(user_id):
-    """Gibt Details eines einzelnen Users zurueck"""
+    """Return details for a single user"""
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
-    # Container-Status abrufen
+    # Retrieve container status
     container_status = 'no_container'
     if user.container_id:
         try:
@@ -63,28 +63,28 @@ def get_user(user_id):
 @jwt_required()
 @admin_required()
 def block_user(user_id):
-    """Sperrt einen Benutzer und alle seine Container (Cascading - Phase 7)"""
+    """Block a user and all their containers (cascading - Phase 7)"""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
-        return jsonify({'error': 'Du kannst dich nicht selbst sperren'}), 400
+        return jsonify({'error': 'Cannot block yourself'}), 400
 
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
     if user.is_admin:
-        return jsonify({'error': 'Admins koennen nicht gesperrt werden'}), 400
+        return jsonify({'error': 'Admins cannot be blocked'}), 400
 
     if user.is_blocked:
-        return jsonify({'error': 'User ist bereits gesperrt'}), 400
+        return jsonify({'error': 'User is already blocked'}), 400
 
     user.is_blocked = True
     user.blocked_at = datetime.utcnow()
     user.blocked_by = int(admin_id)
 
-    # CASCADE: Alle Container des Users blockieren (Phase 7)
+    # CASCADE: Block all user containers (Phase 7)
     container_mgr = ContainerManager()
     blocked_containers = 0
 
@@ -94,7 +94,7 @@ def block_user(user_id):
                 if container.container_id:
                     container_mgr.stop_container(container.container_id)
             except Exception as e:
-                current_app.logger.warning(f"Container stoppen fehlgeschlagen: {str(e)}")
+                current_app.logger.warning(f"Failed to stop container: {str(e)}")
 
             container.is_blocked = True
             container.blocked_at = datetime.utcnow()
@@ -103,10 +103,10 @@ def block_user(user_id):
 
     db.session.commit()
 
-    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} gesperrt (cascade: {blocked_containers} Container blockiert)")
+    current_app.logger.info(f"User {user.email} blocked by admin {admin_id} (cascade: {blocked_containers} containers blocked)")
 
     return jsonify({
-        'message': f'User {user.email} wurde gesperrt',
+        'message': f'User {user.email} blocked',
         'user': user.to_dict(),
         'containers_blocked': blocked_containers
     }), 200
@@ -116,14 +116,14 @@ def block_user(user_id):
 @jwt_required()
 @admin_required()
 def unblock_user(user_id):
-    """Entsperrt einen Benutzer (User-Level Blockade)"""
+    """Unblock a user (user-level block)"""
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
     if not user.is_blocked:
-        return jsonify({'error': 'User ist nicht gesperrt'}), 400
+        return jsonify({'error': 'User is not blocked'}), 400
 
     user.is_blocked = False
     user.blocked_at = None
@@ -131,19 +131,19 @@ def unblock_user(user_id):
     db.session.commit()
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"User {user.email} wurde von Admin {admin_id} entsperrt")
+    current_app.logger.info(f"User {user.email} unblocked by admin {admin_id}")
 
-    # Hinweis: Container-Level Blockaden werden NICHT automatisch aufgehoben
-    # Diese müssen separat über /api/admin/containers/<id>/unblock entsperrt werden
+    # Note: Container-level blocks are NOT automatically lifted
+    # They must be unblocked separately via /api/admin/containers/<id>/unblock
     unblocked_containers = 0
     for container in user.containers:
         if container.is_blocked:
             unblocked_containers += 1
 
     return jsonify({
-        'message': f'User {user.email} wurde entsperrt',
+        'message': f'User {user.email} unblocked',
         'user': user.to_dict(),
-        'note': f'{unblocked_containers} Container sind noch blockiert und müssen separat entsperrt werden'
+        'note': f'{unblocked_containers} containers are still blocked and must be unblocked separately'
     }), 200
 
 
@@ -151,16 +151,16 @@ def unblock_user(user_id):
 @jwt_required()
 @admin_required()
 def resend_user_verification(user_id):
-    """Sendet Magic Link erneut an einen Benutzer (für Admin-Funktion)"""
+    """Resend magic link to a user (admin function)"""
     from email_service import generate_magic_link_token, send_magic_link_email
     from models import MagicLinkToken
 
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
-    # Generiere neuen Magic Link Token
+    # Generate new magic link token
     token = generate_magic_link_token()
     expires_at = datetime.utcnow() + timedelta(seconds=Config.MAGIC_LINK_TOKEN_EXPIRY)
 
@@ -174,14 +174,14 @@ def resend_user_verification(user_id):
     db.session.add(magic_token)
     db.session.commit()
 
-    # Email senden
+    # Send email
     email_sent = send_magic_link_email(user.email, token, 'login')
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"Magic Link für User {user.email} wurde von Admin {admin_id} erneut gesendet")
+    current_app.logger.info(f"Magic link for user {user.email} resent by admin {admin_id}")
 
     return jsonify({
-        'message': f'Login-Link an {user.email} gesendet',
+        'message': f'Login link sent to {user.email}',
         'email_sent': email_sent
     }), 200
 
@@ -190,34 +190,34 @@ def resend_user_verification(user_id):
 @jwt_required()
 @admin_required()
 def delete_user_container(user_id):
-    """Loescht spezifische Container eines Benutzers (Multi-Container Support)"""
+    """Delete specific containers of a user (multi-container support)"""
     admin_id = get_jwt_identity()
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
     if not user.containers:
         return jsonify({
-            'message': 'User hat keine Container',
+            'message': 'User has no containers',
             'deleted': 0,
             'failed': [],
             'skipped': True
         }), 200
 
-    # Hole container_ids aus Request-Body falls vorhanden
+    # Get container_ids from request body if provided
     data = request.get_json() or {}
     container_ids = data.get('container_ids', [])
 
-    # Bestimme welche Container zu löschen sind
+    # Determine which containers to delete
     containers_to_delete = user.containers
     if container_ids:
-        # Nur die spezifizierten Container löschen
+        # Only delete specified containers
         containers_to_delete = [c for c in user.containers if c.id in container_ids]
 
     if not containers_to_delete:
         return jsonify({
-            'message': 'Keine Container zum Löschen gefunden',
+            'message': 'No containers found to delete',
             'deleted': 0,
             'failed': [],
             'skipped': True
@@ -227,7 +227,7 @@ def delete_user_container(user_id):
     deleted_count = 0
     failed_containers = []
 
-    # Iteriere über die Container die gelöscht werden sollen
+    # Iterate over containers to be deleted
     for container in containers_to_delete:
         if not container.container_id:
             continue
@@ -236,21 +236,21 @@ def delete_user_container(user_id):
             container_mgr.stop_container(container.container_id)
             container_mgr.remove_container(container.container_id)
             deleted_count += 1
-            current_app.logger.info(f"Container {container.container_id[:12]} (Type: {container.container_type}) gelöscht")
+            current_app.logger.info(f"Container {container.container_id[:12]} (type: {container.container_type}) deleted")
 
-            # Lösche DB-Eintrag
+            # Delete DB entry
             db.session.delete(container)
         except Exception as e:
-            current_app.logger.warning(f"Container {container.container_id[:12]} konnte nicht gelöscht werden: {str(e)}")
+            current_app.logger.warning(f"Container {container.container_id[:12]} could not be deleted: {str(e)}")
             failed_containers.append(container.container_id[:12])
 
     db.session.commit()
 
-    current_app.logger.info(f"Admin {admin_id} löschte {deleted_count} Container von User {user.email}")
+    current_app.logger.info(f"Admin {admin_id} deleted {deleted_count} containers of user {user.email}")
 
     return jsonify({
-        'message': f'{deleted_count} Container gelöscht' +
-                   (f', {len(failed_containers)} fehlgeschlagen' if failed_containers else ''),
+        'message': f'{deleted_count} containers deleted' +
+                   (f', {len(failed_containers)} failed' if failed_containers else ''),
         'deleted': deleted_count,
         'failed': failed_containers,
         'partial_failure': len(failed_containers) > 0
@@ -261,19 +261,19 @@ def delete_user_container(user_id):
 @jwt_required()
 @admin_required()
 def delete_user(user_id):
-    """Loescht einen Benutzer komplett (DSGVO-konform)"""
+    """Delete a user completely (GDPR compliant)"""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
-        return jsonify({'error': 'Du kannst dich nicht selbst loeschen'}), 400
+        return jsonify({'error': 'Cannot delete yourself'}), 400
 
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
     if user.is_admin:
-        return jsonify({'error': 'Admins koennen nicht geloescht werden'}), 400
+        return jsonify({'error': 'Admins cannot be deleted'}), 400
 
     email = user.email
     deletion_summary = {
@@ -283,7 +283,7 @@ def delete_user(user_id):
         'takeover_sessions_deleted': 0
     }
 
-    # 1. Alle Docker-Container loeschen
+    # 1. Delete all Docker containers
     container_mgr = ContainerManager()
     for container in user.containers:
         if container.container_id:
@@ -291,41 +291,41 @@ def delete_user(user_id):
                 container_mgr.stop_container(container.container_id)
                 container_mgr.remove_container(container.container_id)
                 deletion_summary['containers_deleted'] += 1
-                current_app.logger.info(f"Container {container.container_id[:12]} (Type: {container.container_type}) geloescht")
+                current_app.logger.info(f"Container {container.container_id[:12]} (type: {container.container_type}) deleted")
             except Exception as e:
-                current_app.logger.warning(f"Container {container.container_id[:12]} fehlgeschlagen: {str(e)}")
+                current_app.logger.warning(f"Container {container.container_id[:12]} failed: {str(e)}")
                 deletion_summary['containers_failed'].append(container.container_id[:12])
 
-    # 2. MagicLinkToken loeschen (DSGVO: IP-Adressen)
+    # 2. Delete MagicLinkTokens (GDPR: IP addresses)
     magic_tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
     for token in magic_tokens:
         db.session.delete(token)
         deletion_summary['magic_tokens_deleted'] += 1
 
-    # 3. AdminTakeoverSession loeschen (als Target-User)
+    # 3. Delete AdminTakeoverSessions (as target user)
     takeover_sessions = AdminTakeoverSession.query.filter_by(target_user_id=user.id).all()
     for session in takeover_sessions:
         db.session.delete(session)
         deletion_summary['takeover_sessions_deleted'] += 1
 
-    # 4. User loeschen (CASCADE loescht UserContainer-DB-Eintraege)
+    # 4. Delete user (CASCADE deletes UserContainer DB entries)
     db.session.delete(user)
     db.session.commit()
 
     # Logging
     current_app.logger.info(
-        f"User {email} vollstaendig geloescht von Admin {admin_id}. "
+        f"User {email} completely deleted by admin {admin_id}. "
         f"Summary: {deletion_summary}"
     )
 
     return jsonify({
-        'message': f'User {email} wurde vollstaendig geloescht',
+        'message': f'User {email} completely deleted',
         'summary': deletion_summary
     }), 200
 
 
 # ============================================================
-# Takeover-Endpoints (Phase 2 - Dummy-Implementierung)
+# Takeover Endpoints (Phase 2 - Dummy Implementation)
 # ============================================================
 
 @admin_bp.route('/users/<int:user_id>/takeover', methods=['POST'])
@@ -333,8 +333,8 @@ def delete_user(user_id):
 @admin_required()
 def start_takeover(user_id):
     """
-    Startet eine Takeover-Session für einen User-Container.
-    DUMMY-IMPLEMENTIERUNG - wird in Phase 2 vollstaendig implementiert.
+    Start a takeover session for a user container.
+    DUMMY IMPLEMENTATION - will be fully implemented in Phase 2.
     """
     admin_id = get_jwt_identity()
     data = request.get_json() or {}
@@ -343,12 +343,12 @@ def start_takeover(user_id):
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({'error': 'User nicht gefunden'}), 404
+        return jsonify({'error': 'User not found'}), 404
 
     if not user.container_id:
-        return jsonify({'error': 'User hat keinen Container'}), 400
+        return jsonify({'error': 'User has no container'}), 400
 
-    # Takeover-Session erstellen (nur Protokollierung)
+    # Create takeover session (logging only)
     session = AdminTakeoverSession(
         admin_id=int(admin_id),
         target_user_id=user_id,
@@ -357,13 +357,13 @@ def start_takeover(user_id):
     db.session.add(session)
     db.session.commit()
 
-    current_app.logger.info(f"Admin {admin_id} hat Takeover für User {user.email} gestartet (Session {session.id})")
+    current_app.logger.info(f"Admin {admin_id} started takeover for user {user.email} (session {session.id})")
 
     return jsonify({
-        'message': 'Takeover-Funktion ist noch nicht vollstaendig implementiert (Phase 2)',
+        'message': 'Takeover feature is not yet fully implemented (Phase 2)',
         'session_id': session.id,
         'status': 'dummy',
-        'note': 'Diese Funktion wird in einer späteren Version verfügbar sein'
+        'note': 'This feature will be available in a later version'
     }), 200
 
 
@@ -372,25 +372,25 @@ def start_takeover(user_id):
 @admin_required()
 def end_takeover(session_id):
     """
-    Beendet eine Takeover-Session.
-    DUMMY-IMPLEMENTIERUNG - wird in Phase 2 vollstaendig implementiert.
+    End a takeover session.
+    DUMMY IMPLEMENTATION - will be fully implemented in Phase 2.
     """
     session = AdminTakeoverSession.query.get(session_id)
 
     if not session:
-        return jsonify({'error': 'Takeover-Session nicht gefunden'}), 404
+        return jsonify({'error': 'Takeover session not found'}), 404
 
     if session.ended_at:
-        return jsonify({'error': 'Takeover-Session ist bereits beendet'}), 400
+        return jsonify({'error': 'Takeover session has already ended'}), 400
 
     session.ended_at = datetime.utcnow()
     db.session.commit()
 
     admin_id = get_jwt_identity()
-    current_app.logger.info(f"Admin {admin_id} hat Takeover-Session {session_id} beendet")
+    current_app.logger.info(f"Admin {admin_id} ended takeover session {session_id}")
 
     return jsonify({
-        'message': 'Takeover-Session beendet',
+        'message': 'Takeover session ended',
         'session_id': session_id
     }), 200
 
@@ -399,7 +399,7 @@ def end_takeover(session_id):
 @jwt_required()
 @admin_required()
 def get_active_takeovers():
-    """Listet alle aktiven Takeover-Sessions auf"""
+    """List all active takeover sessions"""
     sessions = AdminTakeoverSession.query.filter_by(ended_at=None).all()
 
     sessions_list = []
@@ -423,7 +423,7 @@ def get_active_takeovers():
 @admin_bp.route('/debug', methods=['GET', 'POST'])
 def debug_management():
     """
-    Debug-Management Endpoint für Logs und Datenbank-Bereinigung
+    Debug management endpoint for logs and database cleanup
     ---
     tags:
       - Debug
@@ -439,58 +439,58 @@ def debug_management():
           - delete-email
           - delete-token
           - info
-        description: Welche Aktion soll ausgeführt werden?
+        description: Which action to perform?
       - name: email
         in: query
         type: string
         required: false
-        description: Email-Adresse des Users (erforderlich für delete-email und delete-token)
+        description: User email address (required for delete-email and delete-token)
       - name: X-Debug-Token
         in: header
         type: string
         required: false
-        description: Debug-Token alternativ zu JWT-Authentication
+        description: Debug token as alternative to JWT authentication
     security:
       - jwt: []
       - debug_token: []
     responses:
       200:
-        description: Erfolgreich ausgeführt
+        description: Successfully executed
         schema:
           type: object
           properties:
             action:
               type: string
-              description: Die ausgeführte Aktion
+              description: The executed action
             message:
               type: string
-              description: Rückmeldung
+              description: Response message
             logs:
               type: string
-              description: Log-Inhalte (nur bei view-logs)
+              description: Log contents (only for view-logs)
             users:
               type: array
-              description: Liste der User (nur bei list-users)
+              description: List of users (only for list-users)
             tokens_deleted:
               type: integer
-              description: Anzahl gelöschter Tokens
+              description: Number of deleted tokens
       400:
-        description: Ungültige Parameter
+        description: Invalid parameters
         schema:
           type: object
           properties:
             error:
               type: string
       403:
-        description: Authentifizierung erforderlich
+        description: Authentication required
       404:
-        description: User oder Ressource nicht gefunden
+        description: User or resource not found
     """
-    # Authentifizierung prüfen
+    # Check authentication
     debug_token = current_app.config.get('DEBUG_TOKEN')
     provided_token = request.headers.get('X-Debug-Token')
 
-    # Versuch JWT-Auth
+    # Try JWT auth
     is_admin = False
     try:
         from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
@@ -502,9 +502,9 @@ def debug_management():
     except:
         pass
 
-    # Authentifizierung validieren
+    # Validate authentication
     if not (is_admin or (debug_token and provided_token == debug_token)):
-        return jsonify({'error': 'Authentifizierung erforderlich (JWT oder X-Debug-Token Header)'}), 403
+        return jsonify({'error': 'Authentication required (JWT or X-Debug-Token header)'}), 403
 
     action = request.args.get('action', '').lower()
 
@@ -523,9 +523,9 @@ def debug_management():
                 'logs': ''.join(last_100)
             }), 200
         except FileNotFoundError:
-            return jsonify({'error': f'Log-Datei nicht gefunden: {log_file}'}), 404
+            return jsonify({'error': f'Log file not found: {log_file}'}), 404
         except Exception as e:
-            return jsonify({'error': f'Fehler beim Lesen der Logs: {str(e)}'}), 500
+            return jsonify({'error': f'Error reading logs: {str(e)}'}), 500
 
     # ===== clear-logs =====
     elif action == 'clear-logs':
@@ -533,30 +533,30 @@ def debug_management():
         try:
             with open(log_file, 'w') as f:
                 f.write('')
-            current_app.logger.info('[DEBUG] Logs wurden gelöscht')
+            current_app.logger.info('[DEBUG] Logs cleared')
             return jsonify({
                 'action': 'clear-logs',
-                'message': 'Log-Datei wurde geleert',
+                'message': 'Log file cleared',
                 'log_file': log_file
             }), 200
         except Exception as e:
-            return jsonify({'error': f'Fehler beim Löschen der Logs: {str(e)}'}), 500
+            return jsonify({'error': f'Error clearing logs: {str(e)}'}), 500
 
     # ===== delete-email =====
     elif action == 'delete-email':
         email = request.args.get('email', '').strip()
         if not email:
-            return jsonify({'error': 'Parameter erforderlich: email'}), 400
+            return jsonify({'error': 'Required parameter: email'}), 400
 
         try:
             user = User.query.filter_by(email=email).first()
             if not user:
-                return jsonify({'error': f'User {email} nicht gefunden'}), 404
+                return jsonify({'error': f'User {email} not found'}), 404
 
             user_id = user.id
             email_deleted = user.email
 
-            # Container löschen falls vorhanden
+            # Delete container if present
             if user.container_id:
                 try:
                     container_mgr = ContainerManager()
@@ -565,32 +565,32 @@ def debug_management():
                 except:
                     pass
 
-            # User und alle zugehörigen Daten löschen
+            # Delete user and all associated data
             db.session.delete(user)
             db.session.commit()
 
-            current_app.logger.info(f'[DEBUG] User {email_deleted} wurde gelöscht')
+            current_app.logger.info(f'[DEBUG] User {email_deleted} deleted')
 
             return jsonify({
                 'action': 'delete-email',
-                'message': f'User {email_deleted} wurde gelöscht',
+                'message': f'User {email_deleted} deleted',
                 'user_id': user_id
             }), 200
         except Exception as e:
             db.session.rollback()
-            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+            return jsonify({'error': f'Error deleting: {str(e)}'}), 500
 
     # ===== delete-token =====
     elif action == 'delete-token':
         email = request.args.get('email', '').strip()
         if not email:
-            return jsonify({'error': 'Parameter erforderlich: email'}), 400
+            return jsonify({'error': 'Required parameter: email'}), 400
 
         try:
             from models import MagicLinkToken
             user = User.query.filter_by(email=email).first()
             if not user:
-                return jsonify({'error': f'User {email} nicht gefunden'}), 404
+                return jsonify({'error': f'User {email} not found'}), 404
 
             tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
             count = len(tokens)
@@ -599,16 +599,16 @@ def debug_management():
                 db.session.delete(token)
             db.session.commit()
 
-            current_app.logger.info(f'[DEBUG] {count} Magic Link Tokens für {email} wurden gelöscht')
+            current_app.logger.info(f'[DEBUG] {count} magic link tokens for {email} deleted')
 
             return jsonify({
                 'action': 'delete-token',
-                'message': f'{count} Tokens für {email} gelöscht',
+                'message': f'{count} tokens for {email} deleted',
                 'tokens_deleted': count
             }), 200
         except Exception as e:
             db.session.rollback()
-            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+            return jsonify({'error': f'Error: {str(e)}'}), 500
 
     # ===== list-users =====
     elif action == 'list-users':
@@ -636,14 +636,14 @@ def debug_management():
     elif action == 'info' or not action:
         return jsonify({
             'endpoint': '/api/admin/debug',
-            'auth': 'X-Debug-Token Header oder Admin JWT',
+            'auth': 'X-Debug-Token header or admin JWT',
             'actions': {
-                'view-logs': 'Zeigt letzte 100 Zeilen der Logs',
-                'clear-logs': 'Löscht alle Logs',
-                'list-users': 'Listet alle registrierten User auf',
-                'delete-email': 'Löscht User (Parameter: email=...)',
-                'delete-token': 'Löscht Magic Link Tokens (Parameter: email=...)',
-                'info': 'Diese Hilfe'
+                'view-logs': 'Show last 100 lines of logs',
+                'clear-logs': 'Clear all logs',
+                'list-users': 'List all registered users',
+                'delete-email': 'Delete user (parameter: email=...)',
+                'delete-token': 'Delete magic link tokens (parameter: email=...)',
+                'info': 'This help'
             },
             'examples': [
                 'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
@@ -654,7 +654,7 @@ def debug_management():
         }), 200
 
     else:
-        return jsonify({'error': f'Unbekannte Action: {action}'}), 400
+        return jsonify({'error': f'Unknown action: {action}'}), 400
 
 
 # ============================================================
@@ -665,34 +665,34 @@ def debug_management():
 @jwt_required()
 @admin_required()
 def block_container(container_id):
-    """Blockiert einen einzelnen User-Container"""
+    """Block a single user container"""
     admin_id = get_jwt_identity()
 
     container = UserContainer.query.get(container_id)
     if not container:
-        return jsonify({'error': 'Container nicht gefunden'}), 404
+        return jsonify({'error': 'Container not found'}), 404
 
     if container.is_blocked:
-        return jsonify({'error': 'Container ist bereits gesperrt'}), 400
+        return jsonify({'error': 'Container is already blocked'}), 400
 
-    # Container stoppen
+    # Stop container
     container_mgr = ContainerManager()
     try:
         if container.container_id:
             container_mgr.stop_container(container.container_id)
     except Exception as e:
-        current_app.logger.warning(f"Container stoppen fehlgeschlagen: {str(e)}")
+        current_app.logger.warning(f"Failed to stop container: {str(e)}")
 
-    # DB aktualisieren
+    # Update DB
     container.is_blocked = True
     container.blocked_at = datetime.utcnow()
     container.blocked_by = int(admin_id)
     db.session.commit()
 
-    current_app.logger.info(f"Container {container.id} ({container.container_type}) gesperrt von Admin {admin_id}")
+    current_app.logger.info(f"Container {container.id} ({container.container_type}) blocked by admin {admin_id}")
 
     return jsonify({
-        'message': f'Container {container.container_type} wurde gesperrt'
+        'message': f'Container {container.container_type} blocked'
     }), 200
 
 
@@ -700,27 +700,27 @@ def block_container(container_id):
 @jwt_required()
 @admin_required()
 def unblock_container(container_id):
-    """Entsperrt einen einzelnen User-Container"""
+    """Unblock a single user container"""
     admin_id = get_jwt_identity()
 
     container = UserContainer.query.get(container_id)
     if not container:
-        return jsonify({'error': 'Container nicht gefunden'}), 404
+        return jsonify({'error': 'Container not found'}), 404
 
     if not container.is_blocked:
-        return jsonify({'error': 'Container ist nicht gesperrt'}), 400
+        return jsonify({'error': 'Container is not blocked'}), 400
 
-    # DB aktualisieren
+    # Update DB
     container.is_blocked = False
     container.blocked_at = None
     container.blocked_by = None
     db.session.commit()
 
-    current_app.logger.info(f"Container {container.id} ({container.container_type}) entsperrt von Admin {admin_id}")
+    current_app.logger.info(f"Container {container.id} ({container.container_type}) unblocked by admin {admin_id}")
 
     return jsonify({
-        'message': f'Container {container.container_type} wurde entsperrt',
-        'info': 'User kann Container jetzt manuell starten'
+        'message': f'Container {container.container_type} unblocked',
+        'info': 'User can now start the container manually'
     }), 200
 
 
@@ -728,7 +728,7 @@ def unblock_container(container_id):
 @jwt_required()
 @admin_required()
 def bulk_block_containers():
-    """Blockiert mehrere Container gleichzeitig"""
+    """Block multiple containers at once"""
     admin_id = get_jwt_identity()
     container_ids = request.json.get('container_ids', [])
 
@@ -749,7 +749,7 @@ def bulk_block_containers():
             if container.container_id:
                 container_mgr.stop_container(container.container_id)
         except Exception as e:
-            current_app.logger.warning(f"Container {container_id} stoppen fehlgeschlagen: {str(e)}")
+            current_app.logger.warning(f"Failed to stop container {container_id}: {str(e)}")
 
         container.is_blocked = True
         container.blocked_at = datetime.utcnow()
@@ -759,7 +759,7 @@ def bulk_block_containers():
     db.session.commit()
 
     return jsonify({
-        'message': f'{success} Container gesperrt',
+        'message': f'{success} containers blocked',
         'failed': failed
     }), 200 if not failed else 207
 
@@ -768,7 +768,7 @@ def bulk_block_containers():
 @jwt_required()
 @admin_required()
 def bulk_unblock_containers():
-    """Entsperrt mehrere Container gleichzeitig"""
+    """Unblock multiple containers at once"""
     admin_id = get_jwt_identity()
     container_ids = request.json.get('container_ids', [])
 
@@ -792,7 +792,7 @@ def bulk_unblock_containers():
     db.session.commit()
 
     return jsonify({
-        'message': f'{success} Container entsperrt',
+        'message': f'{success} containers unblocked',
         'failed': failed
     }), 200 if not failed else 207
 
@@ -802,11 +802,11 @@ def bulk_unblock_containers():
 @admin_required()
 def reload_config():
     """
-    Lädt .env neu und aktualisiert alle Config-Werte.
-    WICHTIG: Nach .env Änderungen IMMER diesen Endpoint aufrufen!
+    Reload .env and update all config values.
+    IMPORTANT: Always call this endpoint after .env changes!
 
-    Statt: docker-compose down + docker-compose up -d
-    Einfach: curl -X POST http://localhost:5000/api/admin/config/reload -H "Authorization: Bearer $JWT_TOKEN"
+    Instead of: docker-compose down + docker-compose up -d
+    Simply: curl -X POST http://localhost:5000/api/admin/config/reload -H "Authorization: Bearer $JWT_TOKEN"
     """
     try:
         from dotenv import load_dotenv
@@ -814,23 +814,23 @@ def reload_config():
 
         admin_id = get_jwt_identity()
 
-        current_app.logger.info(f"[CONFIG] Admin {admin_id} fordert Config-Reload an")
+        current_app.logger.info(f"[CONFIG] Admin {admin_id} requesting config reload")
 
-        # .env neu laden
+        # Reload .env
         load_dotenv()
 
-        # Aktualisiere alle wichtigen Config-Werte (ohne dass wir die Config-Klasse neu laden müssen)
-        # Diese Werte werden direkt in den Endpoints verwendet
+        # Update all important config values (without needing to reload the Config class)
+        # These values are used directly in the endpoints
         old_smtp_user = current_app.config.get('SMTP_USER')
         old_smtp_from = current_app.config.get('SMTP_FROM')
         old_base_domain = current_app.config.get('BASE_DOMAIN')
 
-        # Lese neue Werte
+        # Read new values
         new_smtp_user = os.getenv('SMTP_USER')
         new_smtp_from = os.getenv('SMTP_FROM')
         new_base_domain = os.getenv('BASE_DOMAIN')
 
-        # Aktualisiere Flask-Config
+        # Update Flask config
         current_app.config['SMTP_USER'] = new_smtp_user
         current_app.config['SMTP_FROM'] = new_smtp_from
         current_app.config['BASE_DOMAIN'] = new_base_domain
@@ -846,14 +846,14 @@ def reload_config():
         if old_base_domain != new_base_domain:
             changes.append(f"BASE_DOMAIN: {old_base_domain} → {new_base_domain}")
 
-        current_app.logger.info(f"[CONFIG] Reload erfolgreich. Änderungen: {', '.join(changes) if changes else 'keine'}")
+        current_app.logger.info(f"[CONFIG] Reload successful. Changes: {', '.join(changes) if changes else 'none'}")
 
         return jsonify({
-            'message': 'Config erfolgreich reloaded',
+            'message': 'Config successfully reloaded',
             'timestamp': datetime.utcnow().isoformat(),
-            'changes': changes if changes else ['keine Änderungen erkannt']
+            'changes': changes if changes else ['no changes detected']
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"[CONFIG] Reload fehlgeschlagen: {str(e)}")
-        return jsonify({'error': f'Config-Reload fehlgeschlagen: {str(e)}'}), 500
+        current_app.logger.error(f"[CONFIG] Reload failed: {str(e)}")
+        return jsonify({'error': f'Config reload failed: {str(e)}'}), 500

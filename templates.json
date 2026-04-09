@@ -4,31 +4,31 @@
       "type": "template-01",
       "image": "user-template-01:latest",
       "display_name": "Nginx Basic",
-      "description": "Einfacher Nginx-Server mit statischen Dateien und Willkommensseite"
+      "description": "Simple Nginx server with static files and welcome page"
     },
     {
       "type": "template-02",
       "image": "user-template-02:latest",
       "display_name": "Nginx Advanced",
-      "description": "Nginx mit erweiterten Features und Konfigurationen"
+      "description": "Nginx with advanced features and configurations"
     },
     {
       "type": "template-next",
       "image": "user-template-next:latest",
       "display_name": "Next.js Production",
-      "description": "React-Anwendung mit Shadcn/UI, TypeScript und modernem Build-Setup"
+      "description": "React application with Shadcn/UI, TypeScript and modern build setup"
     },
     {
       "type": "dictionary",
       "image": "user-template-dictionary:latest",
-      "display_name": "📚 Wörterbuch",
-      "description": "Persönliches Wörterbuch mit Datenbank - Speichern Sie Wörter und Bedeutungen"
+      "display_name": "Dictionary",
+      "description": "Personal dictionary with database - save words and definitions"
     },
     {
       "type": "vcoder",
       "image": "user-template-vcoder:latest",
-      "display_name": "💻 ESP8266 IDE",
-      "description": "Web-IDE mit PlatformIO für ESP8266/Wemos Entwicklung"
+      "display_name": "ESP8266 IDE",
+      "description": "Web IDE with PlatformIO for ESP8266/Wemos development"
     }
   ]
 }

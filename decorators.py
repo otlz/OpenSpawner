@@ -1,5 +1,5 @@
 """
-Decorators fuer Zugriffskontrollen
+Decorators for access control
 """
 from functools import wraps
 from flask import jsonify
@@ -9,8 +9,8 @@ from models import User
 
 def admin_required():
     """
-    Decorator der Admin-Rechte prueft.
-    Muss NACH @jwt_required() verwendet werden.
+    Decorator that checks for admin privileges.
+    Must be used AFTER @jwt_required().
 
     Usage:
         @api_bp.route('/admin/users')
@@ -27,10 +27,10 @@ def admin_required():
             user = User.query.get(int(user_id))
 
             if not user:
-                return jsonify({'error': 'User nicht gefunden'}), 404
+                return jsonify({'error': 'User not found'}), 404
 
             if not user.is_admin:
-                return jsonify({'error': 'Admin-Rechte erforderlich'}), 403
+                return jsonify({'error': 'Admin privileges required'}), 403
 
             return fn(*args, **kwargs)
         return wrapper
@@ -39,8 +39,8 @@ def admin_required():
 
 def verified_required():
     """
-    Decorator der prueft ob Email verifiziert ist.
-    Muss NACH @jwt_required() verwendet werden.
+    Decorator that checks if email is verified.
+    Must be used AFTER @jwt_required().
 
     Usage:
         @api_bp.route('/container/action')
@@ -59,11 +59,11 @@ def verified_required():
             user = User.query.get(int(user_id))
 
             if not user:
-                return jsonify({'error': 'User nicht gefunden'}), 404
+                return jsonify({'error': 'User not found'}), 404
 
             if user.state == UserState.REGISTERED.value:
                 return jsonify({
-                    'error': 'Email nicht verifiziert',
+                    'error': 'Email not verified',
                     'needs_verification': True
                 }), 403
 

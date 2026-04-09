@@ -27,23 +27,22 @@ function VerifyLoginContent() {
 
     if (!token) {
       setStatus("error");
-      setError("Kein Token gefunden");
+      setError("No token found");
       return;
     }
 
     const verify = async () => {
       const maxRetries = 5;
-      const retryDelay = 2000; // 2 Sekunden
-      const maxTimeout = 10000; // 10 Sekunden Gesamtzeit
+      const retryDelay = 2000;
+      const maxTimeout = 10000;
 
       let attempt = 0;
       const startTime = Date.now();
 
       while (attempt < maxRetries) {
-        // Prüfe ob Timeout überschritten
         if (Date.now() - startTime > maxTimeout) {
           setStatus("error");
-          setError("Login hat zu lange gedauert. Bitte versuche es später erneut.");
+          setError("Login timed out. Please try again.");
           return;
         }
 
@@ -51,24 +50,20 @@ function VerifyLoginContent() {
 
         if (result.success) {
           setStatus("success");
-          // Redirect nach 1 Sekunde zum Dashboard
           setTimeout(() => {
             router.push("/dashboard");
           }, 1000);
           return;
         }
 
-        // Fehler - Versuche erneut (außer beim letzten Versuch)
         attempt++;
         if (attempt < maxRetries) {
-          // Warte vor nächstem Versuch
           await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
       }
 
-      // Alle Versuche fehlgeschlagen
       setStatus("error");
-      setError("Login fehlgeschlagen. Bitte versuche den Link erneut anzufordern.");
+      setError("Login failed. Please request a new link.");
     };
 
     verify();
@@ -84,7 +79,7 @@ function VerifyLoginContent() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
               <CardTitle className="text-2xl font-bold">
-                Login läuft...
+                Logging in...
               </CardTitle>
             </>
           )}
@@ -95,10 +90,10 @@ function VerifyLoginContent() {
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
               <CardTitle className="text-2xl font-bold">
-                Login erfolgreich!
+                Login successful!
               </CardTitle>
               <CardDescription>
-                Du wirst zum Dashboard weitergeleitet
+                Redirecting to dashboard
               </CardDescription>
             </>
           )}
@@ -109,7 +104,7 @@ function VerifyLoginContent() {
                 <AlertCircle className="h-6 w-6 text-destructive" />
               </div>
               <CardTitle className="text-2xl font-bold">
-                Login fehlgeschlagen
+                Login failed
               </CardTitle>
             </>
           )}
@@ -118,17 +113,17 @@ function VerifyLoginContent() {
         <CardContent>
           {status === "loading" && (
             <p className="text-center text-muted-foreground">
-              Bitte warten, du wirst eingeloggt...
+              Please wait, logging you in...
             </p>
           )}
 
           {status === "success" && (
             <div className="space-y-4">
               <p className="text-center text-muted-foreground">
-                Du wirst automatisch zum Dashboard weitergeleitet.
+                You will be redirected to the dashboard automatically.
               </p>
               <Button className="w-full" onClick={() => router.push("/dashboard")}>
-                Zum Dashboard
+                Go to Dashboard
               </Button>
             </div>
           )}
@@ -137,7 +132,7 @@ function VerifyLoginContent() {
             <div className="space-y-4">
               <p className="text-center text-destructive">{error}</p>
               <Button variant="outline" className="w-full" asChild>
-                <Link href="/login">Neuen Login-Link anfordern</Link>
+                <Link href="/login">Request new link</Link>
               </Button>
             </div>
           )}

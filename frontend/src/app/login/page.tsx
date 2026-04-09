@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login, user, isLoading } = useAuth();
+  const { signup, user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -36,17 +35,17 @@ export default function LoginPage() {
     setError("");
 
     if (!email) {
-      setError("Bitte gib deine Email-Adresse ein");
+      setError("Please enter your email address");
       return;
     }
 
     setIsSubmitting(true);
-    const result = await login(email);
+    const result = await signup(email);
 
     if (result.success) {
       setEmailSent(true);
     } else {
-      setError(result.message || "Login fehlgeschlagen");
+      setError(result.message || "Request failed");
       setIsSubmitting(false);
     }
   };
@@ -66,9 +65,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
             <Container className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-bold">Login</CardTitle>
+          <CardTitle className="text-2xl font-bold">OpenSpawner</CardTitle>
           <CardDescription>
-            Gib deine Email-Adresse ein, um dich anzumelden
+            Enter your email to sign in or create an account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,14 +78,14 @@ export default function LoginPage() {
                   <Mail className="mt-0.5 h-5 w-5 text-green-600" />
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-green-800">
-                      Email gesendet!
+                      Email sent!
                     </p>
                     <p className="text-sm text-green-700">
-                      Wir haben einen Login-Link an <strong>{email}</strong> gesendet.
-                      Bitte überprüfe dein Postfach und klicke auf den Link.
+                      We sent a magic link to <strong>{email}</strong>.
+                      Check your inbox and click the link to continue.
                     </p>
                     <p className="text-xs text-green-600">
-                      Der Link ist 15 Minuten gültig.
+                      The link is valid for 15 minutes.
                     </p>
                   </div>
                 </div>
@@ -97,9 +96,10 @@ export default function LoginPage() {
                 onClick={() => {
                   setEmailSent(false);
                   setEmail("");
+                  setIsSubmitting(false);
                 }}
               >
-                Neue Email anfordern
+                Request new link
               </Button>
             </div>
           ) : (
@@ -114,11 +114,11 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email-Adresse</Label>
+                <Label htmlFor="email">Email address</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="deine@email.de"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -131,21 +131,14 @@ export default function LoginPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Login-Link wird gesendet...
+                    Sending magic link...
                   </>
                 ) : (
-                  "Login-Link anfordern"
+                  "Continue with Email"
                 )}
               </Button>
             </form>
           )}
-
-          <div className="mt-6 text-center text-sm">
-            Noch kein Konto?{" "}
-            <Link href="/signup" className="text-primary hover:underline">
-              Jetzt registrieren
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,9 +1,9 @@
 # ============================================================
-# Container Spawner - .gitignore
+# OpenSpawner - .gitignore
 # ============================================================
 
 # ============================================================
-# Umgebung und Secrets
+# Environment and Secrets
 # ============================================================
 .env
 .env.local
@@ -75,11 +75,6 @@ yarn-error.log*
 pnpm-debug.log*
 .npm/
 
-# Lock Files (optional - auskommentieren wenn gewuenscht)
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
-
 # TypeScript
 *.tsbuildinfo
 
@@ -87,7 +82,7 @@ pnpm-debug.log*
 .vercel/
 
 # ============================================================
-# Generierte Daten (Server)
+# Generated Data (Server)
 # ============================================================
 data/
 logs/
@@ -101,7 +96,7 @@ logs/
 backup-*.db
 
 # ============================================================
-# IDE / Editoren
+# IDE / Editors
 # ============================================================
 .idea/
 .vscode/
@@ -113,9 +108,14 @@ backup-*.db
 .settings/
 *.sublime-project
 *.sublime-workspace
+CLAUDE.md
+CLAUDE-RULES.md
+AGENTS.md
+.claude/
+.mcp.json
 
 # ============================================================
-# Betriebssystem
+# OS Files
 # ============================================================
 .DS_Store
 .DS_Store?
@@ -127,7 +127,7 @@ Thumbs.db
 desktop.ini
 
 # ============================================================
-# Logs und temporaere Dateien
+# Logs and Temporary Files
 # ============================================================
 *.log
 *.tmp
@@ -135,7 +135,7 @@ desktop.ini
 *.cache
 
 # ============================================================
-# Sicherheit
+# Security
 # ============================================================
 *.pem
 *.key
@@ -146,34 +146,18 @@ secrets/
 credentials/
 
 # ============================================================
-# Docker (nur generierte Dateien)
+# Docker (only generated files)
 # ============================================================
-# Keine Docker-Dateien ignorieren - diese werden benoetigt
-# Aber lokale Override-Dateien ignorieren
 docker-compose.override.yml
 docker-compose.local.yml
 
 # ============================================================
-# Test und Coverage
+# Test and Coverage
 # ============================================================
 coverage/
 .nyc_output/
 test-results/
 junit.xml
-
-# ============================================================
-# Projekt-spezifisch
-# ============================================================
-# CLAUDE.md enthaelt projektspezifische Instruktionen fuer Claude Code
-# Kann bei Bedarf auskommentiert werden um es zu behalten
-CLAUDE.md
-CLAUDE-RULES.md
-.claude/
-# AGENTS.md - Guide fuer agentic coding assistants
-# Wird von AI-Assistenten zum Verstaendnis der Codebase verwendet
-# Sollte nicht gepusht werden
-AGENTS.md
--AGENTS.md
 
 # ============================================================
 # Misc

@@ -8,10 +8,10 @@ db = SQLAlchemy()
 
 
 class UserState(Enum):
-    """Benutzer-Status fuer Email-Verifizierung und Aktivitaet"""
-    REGISTERED = 'registered'   # Signup abgeschlossen, Email nicht verifiziert
-    VERIFIED = 'verified'       # Email verifiziert, Container noch nie genutzt
-    ACTIVE = 'active'           # Container mindestens einmal gestartet
+    """User status for email verification and activity"""
+    REGISTERED = 'registered'   # Signup completed, email not verified
+    VERIFIED = 'verified'       # Email verified, container never used
+    ACTIVE = 'active'           # Container started at least once
 
 
 class User(UserMixin, db.Model):
@@ -20,24 +20,24 @@ class User(UserMixin, db.Model):
     slug = db.Column(db.String(12), unique=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Admin-Felder
+    # Admin fields
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
 
-    # Sperr-Felder
+    # Blocking fields
     is_blocked = db.Column(db.Boolean, default=False, nullable=False)
     blocked_at = db.Column(db.DateTime, nullable=True)
     blocked_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
-    # Email-Verifizierung und Status
+    # Email verification and status
     state = db.Column(db.String(20), default=UserState.REGISTERED.value, nullable=False)
 
-    # Aktivitaetstracking
+    # Activity tracking
     last_used = db.Column(db.DateTime, nullable=True)
 
-    # Beziehung fuer blocked_by
+    # Relationship for blocked_by
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
 
-    # Multi-Container Support (explicit primaryjoin wegen mehrerer FKs zu User)
+    # Multi-container support (explicit primaryjoin due to multiple FKs to User)
     containers = db.relationship('UserContainer',
                                 primaryjoin='User.id==UserContainer.user_id',
                                 back_populates='user',
@@ -45,16 +45,16 @@ class User(UserMixin, db.Model):
 
     @property
     def container_id(self):
-        """Backwards compatibility: gibt ID des Primary Containers zurück"""
+        """Backwards compatibility: returns primary container ID"""
         if self.containers:
             return self.containers[0].container_id
         return None
 
     @container_id.setter
     def container_id(self, value):
-        """Backwards compatibility: setzt Primary Container ID"""
+        """Backwards compatibility: sets primary container ID"""
         if not self.containers:
-            # Erstelle Primary Container wenn nicht vorhanden
+            # Create primary container if not present
             from config import Config
             primary = UserContainer(
                 user_id=self.id,
@@ -68,16 +68,16 @@ class User(UserMixin, db.Model):
 
     @property
     def container_port(self):
-        """Backwards compatibility: gibt Port des Primary Containers zurück"""
+        """Backwards compatibility: returns primary container port"""
         if self.containers:
             return self.containers[0].container_port
         return None
 
     @container_port.setter
     def container_port(self, value):
-        """Backwards compatibility: setzt Primary Container Port"""
+        """Backwards compatibility: sets primary container port"""
         if not self.containers:
-            # Erstelle Primary Container wenn nicht vorhanden
+            # Create primary container if not present
             from config import Config
             primary = UserContainer(
                 user_id=self.id,
@@ -90,7 +90,7 @@ class User(UserMixin, db.Model):
         self.containers[0].container_port = value
 
     def to_dict(self):
-        """Konvertiert User zu Dictionary fuer API-Responses"""
+        """Convert User to dictionary for API responses"""
         return {
             'id': self.id,
             'email': self.email,
@@ -106,13 +106,13 @@ class User(UserMixin, db.Model):
 
 
 class MagicLinkToken(db.Model):
-    """Magic Link Tokens für Passwordless Authentication"""
+    """Magic link tokens for passwordless authentication"""
     __tablename__ = 'magic_link_token'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     token = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    token_type = db.Column(db.String(20), nullable=False)  # 'signup' oder 'login'
+    token_type = db.Column(db.String(20), nullable=False)  # 'signup' or 'login'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     used_at = db.Column(db.DateTime, nullable=True)
@@ -121,50 +121,50 @@ class MagicLinkToken(db.Model):
     user = db.relationship('User', backref=db.backref('magic_tokens', lazy=True, cascade='all, delete-orphan'))
 
     def is_valid(self):
-        """Prüft ob Token noch gültig ist"""
+        """Check if token is still valid"""
         if self.used_at is not None:
-            return False  # Token bereits verwendet
+            return False  # Token already used
         if datetime.utcnow() > self.expires_at:
-            return False  # Token abgelaufen
+            return False  # Token expired
         return True
 
     def mark_as_used(self):
-        """Markiert Token als verwendet"""
+        """Mark token as used"""
         self.used_at = datetime.utcnow()
 
 
 class UserContainer(db.Model):
-    """Multi-Container pro User (dev und prod)"""
+    """Multiple containers per user"""
     __tablename__ = 'user_container'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    container_type = db.Column(db.String(50), nullable=False)  # 'dev' oder 'prod'
+    container_type = db.Column(db.String(50), nullable=False)
     container_id = db.Column(db.String(100), unique=True)
     container_port = db.Column(db.Integer)
     template_image = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_used = db.Column(db.DateTime)
 
-    # Container Blocking (Phase 7)
+    # Container blocking
     is_blocked = db.Column(db.Boolean, default=False, nullable=False, index=True)
     blocked_at = db.Column(db.DateTime, nullable=True)
     blocked_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
 
-    # Relationships (explicit primaryjoin wegen mehrerer FKs zu User)
+    # Relationships (explicit primaryjoin due to multiple FKs to User)
     user = db.relationship('User',
                           primaryjoin='UserContainer.user_id==User.id',
                           back_populates='containers')
     blocker = db.relationship('User',
                              primaryjoin='UserContainer.blocked_by==User.id')
 
-    # Unique: Ein User kann nur einen Container pro Typ haben
+    # Unique: one container per type per user
     __table_args__ = (
         db.UniqueConstraint('user_id', 'container_type', name='uq_user_container_type'),
     )
 
     def to_dict(self):
-        """Konvertiert UserContainer zu Dictionary"""
+        """Convert UserContainer to dictionary"""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -180,7 +180,7 @@ class UserContainer(db.Model):
 
 
 class AdminTakeoverSession(db.Model):
-    """Protokolliert Admin-Zugriffe auf User-Container (Phase 2)"""
+    """Logs admin access to user containers"""
     id = db.Column(db.Integer, primary_key=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
     target_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)

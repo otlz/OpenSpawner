@@ -42,7 +42,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-2">
-          <h2 className="text-lg font-semibold">Container Spawner</h2>
+          <h2 className="text-lg font-semibold">OpenSpawner</h2>
         </div>
       </SidebarHeader>
 

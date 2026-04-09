@@ -1,4 +1,10 @@
-version: '3.8'
+# OpenSpawner - Local Development / Workshop Docker Compose
+#
+# Usage: docker compose up --build
+# Then open: http://localhost:3000
+#
+# No Traefik required - ports are exposed directly.
+# Works on Docker Desktop (Windows, Mac, Linux).
 
 services:
   # Flask API Backend
@@ -8,49 +14,25 @@ services:
     restart: unless-stopped
 
     ports:
-      - "5000:5000"  # Optional: Direktzugriff für Debugging
+      - "5000:5000"
 
     volumes:
-      # .env zur Laufzeit laden (wird bei restart neu gelesen!)
       - .env:/app/.env:ro
-      # Docker-Socket für Container-Management
       - /var/run/docker.sock:/var/run/docker.sock:rw
-      # Persistente Daten
       - ./data:/app/data
-      # Logs
       - ./logs:/app/logs
 
-    # .env wird als Volume gemountet - keine Duplication nötig!
+    environment:
+      - TRAEFIK_ENABLED=false
 
     networks:
-      - web
+      - openspawner
 
     labels:
-      # Traefik aktivieren
-      - "traefik.enable=true"
-      - "traefik.docker.network=web"
-
-      # API-Router (hoehere Prioritaet fuer /api/*)
-      - "traefik.http.routers.spawner-api.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.spawner-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.spawner-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
-      - "traefik.http.routers.spawner-api.priority=200"
-      - "traefik.http.routers.spawner-api.service=spawner-api-service"
-      - "traefik.http.services.spawner-api-service.loadbalancer.server.port=5000"
-
-      # Health-Router (nur fuer /health Endpoint)
-      - "traefik.http.routers.spawner-health.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/health`)"
-      - "traefik.http.routers.spawner-health.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.spawner-health.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
-      - "traefik.http.routers.spawner-health.priority=100"
-      - "traefik.http.routers.spawner-health.service=spawner-api-service"
-
-      # Metadata
       - "spawner.managed=true"
       - "spawner.version=2.0.0"
       - "spawner.type=api-service"
 
-    # Health-Check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -60,35 +42,24 @@ services:
 
   # Next.js Frontend
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - INTERNAL_API_URL=http://spawner:5000
     container_name: spawner-frontend
     restart: unless-stopped
 
-    environment:
-      - NEXT_PUBLIC_API_URL=
+    ports:
+      - "3000:3000"
 
     networks:
-      - web
+      - openspawner
 
     labels:
-      # Traefik aktivieren
-      - "traefik.enable=true"
-      - "traefik.docker.network=web"
-
-      # Frontend-Router (niedrigere Prioritaet - Catch-All)
-      - "traefik.http.routers.spawner-frontend.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.spawner-frontend.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.spawner-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-lets-encrypt}"
-      - "traefik.http.routers.spawner-frontend.priority=50"
-      - "traefik.http.routers.spawner-frontend.service=spawner-frontend-service"
-      - "traefik.http.services.spawner-frontend-service.loadbalancer.server.port=3000"
-
-      # Metadata
       - "spawner.managed=true"
       - "spawner.version=2.0.0"
       - "spawner.type=frontend-service"
 
-    # Health-Check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
@@ -99,7 +70,32 @@ services:
     depends_on:
       - spawner
 
-# Externes Netzwerk (von deinem Traefik bereits vorhanden)
+  # User container templates (built once, spawned per user)
+  template-01:
+    build: ./user-template-01
+    image: user-template-01:latest
+    profiles: ["build"]
+
+  template-02:
+    build: ./user-template-02
+    image: user-template-02:latest
+    profiles: ["build"]
+
+  template-next:
+    build: ./user-template-next
+    image: user-template-next:latest
+    profiles: ["build"]
+
+  template-dictionary:
+    build: ./user-template-dictionary
+    image: user-template-dictionary:latest
+    profiles: ["build"]
+
+  template-vcoder:
+    build: ./user-template-vcoder
+    image: user-template-vcoder:latest
+    profiles: ["build"]
+
 networks:
-  web:
-    external: true
+  openspawner:
+    driver: bridge

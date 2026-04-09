@@ -27,7 +27,7 @@ async function fetchApi<T>(
 
   let url = `${API_BASE}${endpoint}`;
 
-  // Query-Parameter anhängen
+  // Append query parameters
   if (options.queryParams) {
     const params = new URLSearchParams(options.queryParams);
     url += `?${params.toString()}`;
@@ -42,12 +42,12 @@ async function fetchApi<T>(
     const data = await response.json();
 
     if (!response.ok) {
-      return { error: data.error || "Ein Fehler ist aufgetreten" };
+      return { error: data.error || "An error occurred" };
     }
 
     return { data };
   } catch (error) {
-    return { error: "Netzwerkfehler - Server nicht erreichbar" };
+    return { error: "Network error - server not reachable" };
   }
 }
 

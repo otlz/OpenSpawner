@@ -124,7 +124,7 @@ export default function Home() {
       <footer className="border-t mt-16">
         <div className="container mx-auto flex h-16 items-center justify-center px-4">
           <p className="text-sm text-muted-foreground">
-            Container Spawner - Dein persoenlicher Entwicklungsbereich
+            OpenSpawner - Your personal development environment
           </p>
         </div>
       </footer>
