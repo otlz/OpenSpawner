@@ -2,6 +2,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flasgger import Swagger
 from sqlalchemy import text
+from sqlalchemy import inspect as sa_inspect
 from app.extensions import db, login_manager, jwt
 from app.models import User
 from app.routes.auth import auth_bp
@@ -147,6 +148,28 @@ def create_app():
     # Create database tables on first start
     with app.app_context():
         db.create_all()
+        _migrate_is_admin_to_role(app)
         app.logger.info('Database tables created')
 
     return app
+
+
+def _migrate_is_admin_to_role(app):
+    """Einmalige Migration: is_admin (Boolean) → role (String)."""
+    inspector = sa_inspect(db.engine)
+    columns = [c['name'] for c in inspector.get_columns('user')]
+
+    if 'role' in columns:
+        return  # Already migrated
+
+    if 'is_admin' in columns:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+            conn.execute(text("UPDATE user SET role = 'admin' WHERE is_admin = 1"))
+            conn.commit()
+        app.logger.info('[MIGRATION] Migrated is_admin → role')
+    else:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+            conn.commit()
+        app.logger.info('[MIGRATION] Added role column')

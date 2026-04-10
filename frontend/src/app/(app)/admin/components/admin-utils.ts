@@ -1,6 +1,6 @@
 /** Hilfsfunktionen für die Admin-Seite. */
 
-import { AdminUser } from "@/lib/api";
+import { AdminUser, UserRole } from "@/lib/api";
 
 export type StatusColor = "green" | "yellow" | "red";
 
@@ -64,4 +64,23 @@ export function formatDate(dateString: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Gibt das deutsche Label für eine Rolle zurück. */
+export function getRoleLabel(role: UserRole | string): string {
+  switch (role) {
+    case "admin": return "Administrator";
+    case "manager": return "Lehrer";
+    case "user": return "Schueler";
+    default: return role;
+  }
+}
+
+/** Gibt die CSS-Klassen für ein Rollen-Badge zurück. */
+export function getRoleBadgeColor(role: UserRole | string): string {
+  switch (role) {
+    case "admin": return "bg-purple-100 text-purple-800 border-purple-200";
+    case "manager": return "bg-blue-100 text-blue-800 border-blue-200";
+    default: return "bg-gray-100 text-gray-800 border-gray-200";
+  }
 }

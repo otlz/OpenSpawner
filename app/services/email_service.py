@@ -1,4 +1,5 @@
 """E-Mail-Service für Verifizierungs-E-Mails und Magic-Links."""
+import fnmatch
 import smtplib
 import secrets
 import hashlib
@@ -41,6 +42,41 @@ def check_rate_limit(email: str) -> bool:
     ).count()
 
     return recent_tokens < 3
+
+
+def check_email_allowed(email: str) -> tuple:
+    """
+    Prüft ob eine E-Mail-Adresse per Whitelist/Blacklist zugelassen ist.
+    Gibt (allowed: bool, reason: str) zurück.
+
+    Algorithmus:
+    1. Keine Regeln → alle erlaubt (offene Registrierung)
+    2. Whitelist hat Vorrang: Match → ERLAUBT
+    3. Blacklist: Match → GESPERRT
+    4. Kein Match → erlaubt (Standard: offen)
+    """
+    from app.models import EmailRule
+
+    rules = EmailRule.query.all()
+    if not rules:
+        return True, ''
+
+    whitelist = [r.pattern.lower() for r in rules if r.rule_type == 'whitelist']
+    blacklist = [r.pattern.lower() for r in rules if r.rule_type == 'blacklist']
+
+    email_lower = email.lower()
+
+    # Whitelist hat Vorrang
+    for pattern in whitelist:
+        if fnmatch.fnmatch(email_lower, pattern):
+            return True, ''
+
+    # Blacklist prüfen
+    for pattern in blacklist:
+        if fnmatch.fnmatch(email_lower, pattern):
+            return False, 'Diese E-Mail-Adresse ist nicht zugelassen'
+
+    return True, ''
 
 
 def send_magic_link_email(email: str, token: str, token_type: str) -> bool:

@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { adminApi, AdminUser } from "@/lib/api";
+import { adminApi, AdminUser, UserRole } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,17 +34,28 @@ import {
   Search,
   Monitor,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import StatsCards from "./components/stats-cards";
 import ContainerTab from "./components/container-tab";
 import DeleteDialog from "./components/delete-dialog";
+import EmailRulesTab from "./components/email-rules-tab";
 import {
   getStatusColor,
   getStatusBadgeColor,
   getStateLabel,
   formatDate,
+  getRoleLabel,
+  getRoleBadgeColor,
 } from "./components/admin-utils";
 
 export default function AdminPage() {
@@ -56,7 +67,7 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
-  const [activeTab, setActiveTab] = useState<"users" | "containers">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "containers" | "email-rules">("users");
   const [selectedContainerIds, setSelectedContainerIds] = useState<Set<number>>(new Set());
   const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(new Set());
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -101,7 +112,7 @@ export default function AdminPage() {
 
   const selectAllFiltered = () => {
     const ids = filteredUsers
-      .filter((u) => u.id !== user?.id && !u.is_admin)
+      .filter((u) => u.id !== user?.id && u.role !== 'admin')
       .map((u) => u.id);
     setSelectedUserIds(new Set(ids));
   };
@@ -159,6 +170,14 @@ export default function AdminPage() {
       });
       fetchUsers();
     }
+    setActionLoading(null);
+  };
+
+  const handleChangeRole = async (userId: number, newRole: UserRole) => {
+    setActionLoading(userId);
+    const { data, error } = await adminApi.changeRole(userId, newRole);
+    error ? toast.error(`Fehler: ${error}`) : toast.success(data?.message || "Rolle geändert");
+    if (!error) fetchUsers();
     setActionLoading(null);
   };
 
@@ -402,44 +421,52 @@ export default function AdminPage() {
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">
-          {activeTab === "users" ? "Benutzerverwaltung" : "Container-Verwaltung"}
-        </h1>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">Administration</h2>
         <p className="text-muted-foreground">
-          {activeTab === "users" ? "Verwalte alle registrierten Benutzer" : "Verwalte alle Benutzer-Container"}
+          Benutzer- und Container-Verwaltung
         </p>
       </div>
 
-      {/* Tab-Navigation */}
-      <div className="mb-6 flex gap-2 border-b">
-        <button
-          className={`px-4 py-2 font-medium ${activeTab === "users" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={() => { setActiveTab("users"); setSelectedContainerIds(new Set()); }}
-        >
-          <Users className="mr-2 inline-block h-4 w-4" />
-          User-Verwaltung
-        </button>
-        <button
-          className={`px-4 py-2 font-medium ${activeTab === "containers" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={() => { setActiveTab("containers"); setSelectedUserIds(new Set()); }}
-        >
-          <Container className="mr-2 inline-block h-4 w-4" />
-          Container-Verwaltung
-        </button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          const tab = value as "users" | "containers" | "email-rules";
+          setActiveTab(tab);
+          if (tab === "users") {
+            setSelectedContainerIds(new Set());
+          } else {
+            setSelectedUserIds(new Set());
+          }
+        }}
+      >
+        <TabsList className="mb-6 grid w-fit grid-cols-3">
+          <TabsTrigger value="users">
+            <Users className="mr-1.5 h-3.5 w-3.5" />
+            User-Verwaltung
+          </TabsTrigger>
+          <TabsTrigger value="containers">
+            <Container className="mr-1.5 h-3.5 w-3.5" />
+            Container-Verwaltung
+          </TabsTrigger>
+          {user?.role === 'admin' && (
+            <TabsTrigger value="email-rules">
+              <Mail className="mr-1.5 h-3.5 w-3.5" />
+              E-Mail-Regeln
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      {/* Fehler-Anzeige */}
-      {error && (
-        <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError("")} className="ml-2 underline text-xs">Schließen</button>
-        </div>
-      )}
+        {/* Fehler-Anzeige */}
+        {error && (
+          <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError("")} className="ml-2 underline text-xs">Schließen</button>
+          </div>
+        )}
 
-      {/* User-Tab */}
-      {activeTab === "users" && (
-        <>
+        {/* User-Tab */}
+        <TabsContent value="users">
           <StatsCards stats={stats} />
 
           {/* Bulk-Action Bar */}
@@ -486,12 +513,12 @@ export default function AdminPage() {
             <div className="mb-4 flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={selectedUserIds.size > 0 && selectedUserIds.size === filteredUsers.filter((u) => u.id !== user?.id && !u.is_admin).length}
+                checked={selectedUserIds.size > 0 && selectedUserIds.size === filteredUsers.filter((u) => u.id !== user?.id && u.role !== 'admin').length}
                 onChange={(e) => e.target.checked ? selectAllFiltered() : deselectAll()}
                 className="h-4 w-4 rounded border-gray-300"
               />
               <span className="text-sm text-muted-foreground">
-                Alle {filteredUsers.filter((u) => u.id !== user?.id && !u.is_admin).length} User auswählen
+                Alle {filteredUsers.filter((u) => u.id !== user?.id && u.role !== 'admin').length} User auswählen
               </span>
             </div>
           )}
@@ -507,7 +534,7 @@ export default function AdminPage() {
                 {filteredUsers.map((u) => {
                   const statusColor = getStatusColor(u);
                   const isCurrentUser = u.id === user?.id;
-                  const isSelectable = !isCurrentUser && !u.is_admin;
+                  const isSelectable = !isCurrentUser && u.role !== 'admin';
                   const isSelected = selectedUserIds.has(u.id);
 
                   return (
@@ -527,7 +554,7 @@ export default function AdminPage() {
                           )}
 
                           <Avatar>
-                            <AvatarFallback className={u.is_blocked ? "bg-red-200 text-red-800" : u.is_admin ? "bg-primary text-primary-foreground" : ""}>
+                            <AvatarFallback className={u.is_blocked ? "bg-red-200 text-red-800" : u.role === 'admin' ? "bg-primary text-primary-foreground" : u.role === 'manager' ? "bg-blue-200 text-blue-800" : ""}>
                               {u.email.slice(0, 1).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
@@ -535,8 +562,34 @@ export default function AdminPage() {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{u.email}</span>
-                              {u.is_admin && <Badge variant="secondary" className="text-xs">Admin</Badge>}
+                              {u.role !== 'user' && (
+                                <Badge variant="secondary" className={`text-xs ${getRoleBadgeColor(u.role)}`}>
+                                  {getRoleLabel(u.role)}
+                                </Badge>
+                              )}
                               {u.is_blocked && <Badge variant="destructive" className="text-xs">Gesperrt</Badge>}
+                              {/* Role Dropdown — nur für Admins sichtbar, nicht für sich selbst */}
+                              {user?.role === 'admin' && !isCurrentUser && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground">
+                                      <ChevronRight className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    {(['admin', 'manager', 'user'] as UserRole[]).map((role) => (
+                                      <DropdownMenuItem
+                                        key={role}
+                                        onClick={() => handleChangeRole(u.id, role)}
+                                        disabled={u.role === role}
+                                        className={u.role === role ? "font-bold" : ""}
+                                      >
+                                        {getRoleLabel(role)}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground">{u.email}</p>
                             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -579,7 +632,7 @@ export default function AdminPage() {
                                   <Monitor className="h-4 w-4" />
                                 </Button>
                               )}
-                              {!isCurrentUser && !u.is_admin && (
+                              {!isCurrentUser && u.role !== 'admin' && (
                                 u.is_blocked ? (
                                   <Button variant="ghost" size="sm" onClick={() => handleUnblock(u.id)} title="Entsperren">
                                     <Shield className="h-4 w-4 text-green-600" />
@@ -590,7 +643,7 @@ export default function AdminPage() {
                                   </Button>
                                 )
                               )}
-                              {!isCurrentUser && !u.is_admin && (
+                              {!isCurrentUser && u.role !== 'admin' && (
                                 <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(u.id, u.email)} title="Benutzer löschen" className="text-red-600 hover:text-red-700">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -632,26 +685,33 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
-        </>
-      )}
+        </TabsContent>
 
-      {/* Container-Tab */}
-      {activeTab === "containers" && (
-        <ContainerTab
-          users={users}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedContainerIds={selectedContainerIds}
-          onToggleSelection={toggleContainerSelection}
-          onClearSelection={() => setSelectedContainerIds(new Set())}
-          actionLoading={actionLoading}
-          onBlockContainer={handleBlockContainer}
-          onUnblockContainer={handleUnblockContainer}
-          onBulkBlock={handleBulkBlockContainers}
-          onBulkUnblock={handleBulkUnblockContainers}
-          onRefresh={fetchUsers}
-        />
-      )}
+        {/* Container-Tab */}
+        <TabsContent value="containers">
+          <ContainerTab
+            users={users}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            selectedContainerIds={selectedContainerIds}
+            onToggleSelection={toggleContainerSelection}
+            onClearSelection={() => setSelectedContainerIds(new Set())}
+            actionLoading={actionLoading}
+            onBlockContainer={handleBlockContainer}
+            onUnblockContainer={handleUnblockContainer}
+            onBulkBlock={handleBulkBlockContainers}
+            onBulkUnblock={handleBulkUnblockContainers}
+            onRefresh={fetchUsers}
+          />
+        </TabsContent>
+
+        {/* E-Mail-Regeln-Tab */}
+        {user?.role === 'admin' && (
+          <TabsContent value="email-rules">
+            <EmailRulesTab />
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Lösch-Dialog */}
       <DeleteDialog

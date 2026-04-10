@@ -17,7 +17,7 @@ export default function AdminLayout({
     if (!isLoading) {
       if (!user) {
         router.replace("/login");
-      } else if (!user.is_admin) {
+      } else if (user.role !== 'admin' && user.role !== 'manager') {
         router.replace("/dashboard");
       }
     }
@@ -32,8 +32,8 @@ export default function AdminLayout({
     );
   }
 
-  // Nicht eingeloggt oder kein Admin
-  if (!user || !user.is_admin) {
+  // Nicht eingeloggt oder keine Admin/Manager-Rechte
+  if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

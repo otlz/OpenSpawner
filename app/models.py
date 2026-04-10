@@ -12,14 +12,21 @@ class UserState(Enum):
     ACTIVE = 'active'           # Container started at least once
 
 
+class UserRole(Enum):
+    """Benutzerrollen für Zugriffskontrolle."""
+    ADMIN = 'admin'       # App-Administrator (1-2 pro Schule)
+    MANAGER = 'manager'   # Lehrer — kann Templates und Container verwalten
+    USER = 'user'         # Schüler — kann Container starten
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     slug = db.Column(db.String(12), unique=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Admin fields
-    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    # Role-based access control
+    role = db.Column(db.String(20), default=UserRole.USER.value, nullable=False)
 
     # Blocking fields
     is_blocked = db.Column(db.Boolean, default=False, nullable=False)
@@ -31,6 +38,11 @@ class User(UserMixin, db.Model):
 
     # Activity tracking
     last_used = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def is_admin(self):
+        """Abwärtskompatibilität: Prüft ob der Benutzer Admin ist."""
+        return self.role == UserRole.ADMIN.value
 
     # Relationship for blocked_by
     blocker = db.relationship('User', remote_side=[id], foreign_keys=[blocked_by])
@@ -93,6 +105,7 @@ class User(UserMixin, db.Model):
             'id': self.id,
             'email': self.email,
             'slug': self.slug,
+            'role': self.role,
             'is_admin': self.is_admin,
             'is_blocked': self.is_blocked,
             'blocked_at': self.blocked_at.isoformat() if self.blocked_at else None,
@@ -190,3 +203,30 @@ class AdminTakeoverSession(db.Model):
                            backref=db.backref('takeover_sessions_as_admin', lazy=True))
     target_user = db.relationship('User', foreign_keys=[target_user_id],
                                  backref=db.backref('takeover_sessions_as_target', lazy=True, cascade='all, delete-orphan'))
+
+
+class EmailRule(db.Model):
+    """Whitelist/Blacklist-Regeln für E-Mail-Registrierung."""
+    __tablename__ = 'email_rule'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pattern = db.Column(db.String(255), nullable=False)
+    rule_type = db.Column(db.String(10), nullable=False)  # 'whitelist' or 'blacklist'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    __table_args__ = (
+        db.UniqueConstraint('pattern', 'rule_type', name='uq_email_rule_pattern_type'),
+    )
+
+    def to_dict(self):
+        """Konvertiert die Regel in ein Dictionary für API-Antworten."""
+        return {
+            'id': self.id,
+            'pattern': self.pattern,
+            'rule_type': self.rule_type,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by': self.created_by,
+        }

@@ -22,7 +22,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const navMain = [
     { title: 'Dashboard', url: '/dashboard', icon: Home },
-    ...(user?.is_admin
+    ...(user?.role === 'admin' || user?.role === 'manager'
       ? [{ title: 'Admin', url: '/admin', icon: Shield }]
       : []),
   ]
@@ -35,7 +35,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
                 <Package className="!size-6" />
-                <span className="truncate text-sm font-bold">OpenSpawner</span>
+                <span className="truncate text-base font-bold">OpenSpawner</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

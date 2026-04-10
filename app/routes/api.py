@@ -9,13 +9,14 @@ from flask_jwt_extended import (
     get_jwt
 )
 from datetime import timedelta, datetime
-from app.models import db, User, UserState, MagicLinkToken, UserContainer
+from app.models import db, User, UserState, UserRole, MagicLinkToken, UserContainer
 from app.services.container_manager import ContainerManager
 from app.services.email_service import (
     generate_slug_from_email,
     generate_magic_link_token,
     send_magic_link_email,
-    check_rate_limit
+    check_rate_limit,
+    check_email_allowed
 )
 from config import Config
 import re
@@ -87,13 +88,14 @@ def _create_jwt_response(user):
     access_token = create_access_token(
         identity=str(user.id),
         expires_delta=expires,
-        additional_claims={'is_admin': user.is_admin}
+        additional_claims={'is_admin': user.is_admin, 'role': user.role}
     )
 
     user_data = {
         'id': user.id,
         'email': user.email,
         'slug': user.slug,
+        'role': user.role,
         'is_admin': user.is_admin,
         'state': user.state,
         'container_id': user.container_id
@@ -140,6 +142,11 @@ def api_login():
 
     if not email:
         return jsonify({'error': 'Email is required'}), 400
+
+    # Check email whitelist/blacklist
+    allowed, reason = check_email_allowed(email)
+    if not allowed:
+        return jsonify({'error': reason}), 403
 
     # Check if user exists
     user = User.query.filter_by(email=email).first()
@@ -203,6 +210,11 @@ def api_signup():
     if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
         return jsonify({'error': 'Invalid email address'}), 400
 
+    # Check email whitelist/blacklist
+    allowed, reason = check_email_allowed(email)
+    if not allowed:
+        return jsonify({'error': reason}), 403
+
     # Check if email is already registered
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
@@ -260,7 +272,7 @@ def api_signup():
 
     user = User(email=email, slug=slug)
     user.state = UserState.REGISTERED.value
-    user.is_admin = is_first_user
+    user.role = UserRole.ADMIN.value if is_first_user else UserRole.USER.value
     db.session.add(user)
     db.session.flush()  # So that user.id is available
 
@@ -407,6 +419,7 @@ def api_user_me():
             'id': user.id,
             'email': user.email,
             'slug': user.slug,
+            'role': user.role,
             'is_admin': user.is_admin,
             'state': user.state,
             'last_used': user.last_used.isoformat() if user.last_used else None,

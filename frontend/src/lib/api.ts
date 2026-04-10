@@ -55,10 +55,13 @@ async function fetchApi<T>(
 // Auth Interfaces
 // ============================================================
 
+export type UserRole = 'admin' | 'manager' | 'user';
+
 export interface User {
   id: number;
   email: string;
   slug: string;
+  role: UserRole;
   is_admin: boolean;
   state: "registered" | "verified" | "active";
   last_used?: string | null;
@@ -197,6 +200,24 @@ export interface ActiveTakeoversResponse {
   total: number;
 }
 
+export interface EmailRule {
+  id: number;
+  pattern: string;
+  rule_type: 'whitelist' | 'blacklist';
+  created_at: string | null;
+  created_by: number | null;
+}
+
+export interface EmailRulesResponse {
+  rules: EmailRule[];
+  total: number;
+}
+
+export interface EmailRuleResponse {
+  message: string;
+  rule?: EmailRule;
+}
+
 // ============================================================
 // API Functions
 // ============================================================
@@ -271,6 +292,13 @@ export const adminApi = {
   getUser: (id: number) =>
     fetchApi<AdminUserResponse>(`/api/admin/users/${id}`),
 
+  // Role
+  changeRole: (id: number, role: UserRole) =>
+    fetchApi<AdminActionResponse>(`/api/admin/users/${id}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    }),
+
   // Block/Unblock
   blockUser: (id: number) =>
     fetchApi<AdminActionResponse>(`/api/admin/users/${id}/block`, {
@@ -329,6 +357,21 @@ export const adminApi = {
     fetchApi<{ message: string; failed: number[] }>(`/api/admin/containers/bulk-unblock`, {
       method: "POST",
       body: JSON.stringify({ container_ids }),
+    }),
+
+  // Email Rules (Whitelist/Blacklist)
+  getEmailRules: () =>
+    fetchApi<EmailRulesResponse>("/api/admin/email-rules"),
+
+  createEmailRule: (pattern: string, ruleType: 'whitelist' | 'blacklist') =>
+    fetchApi<EmailRuleResponse>("/api/admin/email-rules", {
+      method: "POST",
+      body: JSON.stringify({ pattern, rule_type: ruleType }),
+    }),
+
+  deleteEmailRule: (id: number) =>
+    fetchApi<{ message: string }>(`/api/admin/email-rules/${id}`, {
+      method: "DELETE",
     }),
 
   // Takeover (Phase 2 - Dummy)

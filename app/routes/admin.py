@@ -5,7 +5,7 @@ Alle Endpunkte erfordern Admin-Rechte (außer /debug mit Debug-Token).
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from app.models import db, User, UserState, AdminTakeoverSession, MagicLinkToken, UserContainer
+from app.models import db, User, UserState, UserRole, AdminTakeoverSession, MagicLinkToken, UserContainer, EmailRule
 from app.decorators import admin_required
 from app.services.container_manager import ContainerManager
 from config import Config
@@ -182,6 +182,114 @@ def resend_user_verification(user_id):
     return jsonify({
         'message': f'Login link sent to {user.email}',
         'email_sent': email_sent
+    }), 200
+
+
+@admin_bp.route('/users/<int:user_id>/role', methods=['PUT'])
+@jwt_required()
+@admin_required()
+def change_user_role(user_id):
+    """Ändert die Rolle eines Benutzers. Admin kann eigene Rolle nicht ändern."""
+    admin_id = int(get_jwt_identity())
+
+    if admin_id == user_id:
+        return jsonify({'error': 'Cannot change your own role'}), 400
+
+    data = request.get_json()
+    new_role = data.get('role', '').lower()
+
+    valid_roles = [r.value for r in UserRole]
+    if new_role not in valid_roles:
+        return jsonify({'error': f'Invalid role. Must be: {", ".join(valid_roles)}'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    old_role = user.role
+    user.role = new_role
+    db.session.commit()
+
+    current_app.logger.info(f"Admin {admin_id} changed role of {user.email}: {old_role} -> {new_role}")
+
+    return jsonify({
+        'message': f'Rolle für {user.email} geändert: {new_role}',
+        'user': user.to_dict()
+    }), 200
+
+
+# ============================================================
+# Email Rules (Whitelist/Blacklist)
+# ============================================================
+
+@admin_bp.route('/email-rules', methods=['GET'])
+@jwt_required()
+@admin_required()
+def get_email_rules():
+    """Listet alle E-Mail-Whitelist/Blacklist-Regeln auf."""
+    rules = EmailRule.query.order_by(EmailRule.created_at.desc()).all()
+    return jsonify({
+        'rules': [r.to_dict() for r in rules],
+        'total': len(rules)
+    }), 200
+
+
+@admin_bp.route('/email-rules', methods=['POST'])
+@jwt_required()
+@admin_required()
+def create_email_rule():
+    """Erstellt eine neue Whitelist- oder Blacklist-Regel."""
+    admin_id = int(get_jwt_identity())
+    data = request.get_json()
+
+    pattern = data.get('pattern', '').strip().lower()
+    rule_type = data.get('rule_type', '').lower()
+
+    if not pattern:
+        return jsonify({'error': 'Pattern is required'}), 400
+    if rule_type not in ('whitelist', 'blacklist'):
+        return jsonify({'error': 'rule_type must be whitelist or blacklist'}), 400
+
+    existing = EmailRule.query.filter_by(pattern=pattern, rule_type=rule_type).first()
+    if existing:
+        return jsonify({'error': f'Regel existiert bereits: {pattern} ({rule_type})'}), 409
+
+    rule = EmailRule(
+        pattern=pattern,
+        rule_type=rule_type,
+        created_by=admin_id
+    )
+    db.session.add(rule)
+    db.session.commit()
+
+    current_app.logger.info(f"Admin {admin_id} created email rule: {rule_type} {pattern}")
+
+    return jsonify({
+        'message': f'{rule_type}-Regel erstellt: {pattern}',
+        'rule': rule.to_dict()
+    }), 201
+
+
+@admin_bp.route('/email-rules/<int:rule_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required()
+def delete_email_rule(rule_id):
+    """Löscht eine E-Mail-Regel."""
+    admin_id = int(get_jwt_identity())
+
+    rule = EmailRule.query.get(rule_id)
+    if not rule:
+        return jsonify({'error': 'Rule not found'}), 404
+
+    pattern = rule.pattern
+    rule_type = rule.rule_type
+    db.session.delete(rule)
+    db.session.commit()
+
+    current_app.logger.info(f"Admin {admin_id} deleted email rule: {rule_type} {pattern}")
+
+    return jsonify({
+        'message': f'{rule_type}-Regel gelöscht: {pattern}'
     }), 200
 
 
