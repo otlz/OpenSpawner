@@ -24,14 +24,14 @@ RUN apt-get update && \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure Apache to listen on port 8080
+# Configure Apache to listen on port 8080 and serve phpMyAdmin at root
 RUN sed -i 's/Listen 80$/Listen 8080/' /etc/apache2/ports.conf \
-    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-enabled/000-default.conf
-
-# Enable phpMyAdmin in Apache
-RUN ln -sf /etc/phpmyadmin/apache.conf /etc/apache2/conf-enabled/phpmyadmin.conf
+    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-enabled/000-default.conf \
+    && sed -i 's|DocumentRoot /var/www/html|DocumentRoot /usr/share/phpmyadmin|' /etc/apache2/sites-enabled/000-default.conf \
+    && echo '<Directory /usr/share/phpmyadmin>\n    AllowOverride All\n    Require all granted\n</Directory>' >> /etc/apache2/sites-enabled/000-default.conf
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY init.sql /etc/mysql/init.sql
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

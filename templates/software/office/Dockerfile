@@ -8,4 +8,11 @@ ENV CUSTOM_PORT=8080
 ENV PUID=1000
 ENV PGID=1000
 
+# Clean up stale VNC/X11 lock files on container restart
+# Without this, KasmVNC fails to bind after docker stop + start
+RUN mkdir -p /custom-cont-init.d && \
+    printf '#!/bin/bash\nrm -f /tmp/.X*-lock /tmp/.X11-unix/X* /run/lock/vnc-*\n' \
+    > /custom-cont-init.d/cleanup-vnc.sh && \
+    chmod +x /custom-cont-init.d/cleanup-vnc.sh
+
 EXPOSE 8080

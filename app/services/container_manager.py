@@ -248,6 +248,11 @@ class ContainerManager:
                 'JWT_SECRET': Config.SECRET_KEY
             }
 
+            # linuxserver.io images need SUBFOLDER for reverse-proxy path prefixes
+            if Config.TRAEFIK_ENABLED:
+                path_slug = f"{slug}-{container_type}"
+                env_vars['SUBFOLDER'] = f"/{path_slug}/"
+
             # Port mapping for local mode (no Traefik)
             ports = {'8080/tcp': None} if not Config.TRAEFIK_ENABLED else None
 
