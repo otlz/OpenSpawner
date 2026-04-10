@@ -71,19 +71,14 @@ services:
       - spawner
 
   # User container templates (built once, spawned per user)
-  template-01:
-    build: ./templates/template-01
-    image: template-01:latest
+  template-nginx:
+    build: ./templates/template-nginx
+    image: template-nginx:latest
     profiles: ["build"]
 
-  template-02:
-    build: ./templates/template-02
-    image: template-02:latest
-    profiles: ["build"]
-
-  template-next:
-    build: ./templates/template-next
-    image: template-next:latest
+  template-nextjs:
+    build: ./templates/template-nextjs
+    image: template-nextjs:latest
     profiles: ["build"]
 
   template-dictionary:
@@ -94,6 +89,16 @@ services:
   template-vcoder:
     build: ./templates/template-vcoder
     image: template-vcoder:latest
+    profiles: ["build"]
+
+  template-vscode:
+    build: ./templates/template-vscode
+    image: template-vscode:latest
+    profiles: ["build"]
+
+  template-office:
+    build: ./templates/template-office
+    image: template-office:latest
     profiles: ["build"]
 
 volumes:

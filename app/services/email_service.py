@@ -1,5 +1,6 @@
 """E-Mail-Service für Verifizierungs-E-Mails und Magic-Links."""
 import fnmatch
+import logging
 import smtplib
 import secrets
 import hashlib
@@ -7,6 +8,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import Config
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 def generate_verification_token():
@@ -162,10 +165,10 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
 
     # In local dev mode (no SMTP configured), just log the URL
     if not Config.SMTP_USER or Config.BASE_DOMAIN == 'localhost':
-        print(f"[EMAIL] ========================================", flush=True)
-        print(f"[EMAIL] MAGIC LINK for {email} ({token_type}):", flush=True)
-        print(f"[EMAIL] {verify_url}", flush=True)
-        print(f"[EMAIL] ========================================", flush=True)
+        logger.info(f"[EMAIL] ========================================")
+        logger.info(f"[EMAIL] MAGIC LINK for {email} ({token_type}):")
+        logger.info(f"[EMAIL] {verify_url}")
+        logger.info(f"[EMAIL] ========================================")
         return True
 
     try:
@@ -181,10 +184,10 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
         server.sendmail(Config.SMTP_FROM, email, msg.as_string())
         server.quit()
 
-        print(f"[EMAIL] Magic link ({token_type}) sent to {email}")
+        logger.info(f"[EMAIL] Magic link ({token_type}) sent to {email}")
         return True
 
     except Exception as e:
-        print(f"[EMAIL] Error sending email to {email}: {str(e)}")
-        print(f"[EMAIL] Fallback - use this link: {verify_url}")
+        logger.error(f"[EMAIL] Error sending email to {email}: {str(e)}")
+        logger.info(f"[EMAIL] Fallback - use this link: {verify_url}")
         return False

@@ -1,7 +1,10 @@
 """Container-Verwaltung für Docker-basierte Benutzer-Container."""
+import logging
 import time
 import docker
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerManager:
@@ -57,9 +60,9 @@ class ContainerManager:
         try:
             network = self._get_client().networks.get(network_name)
             network.connect(container)
-            print(f"[SPAWNER] Container connected to network '{network_name}'")
+            logger.info(f"[SPAWNER] Container connected to network '{network_name}'")
         except Exception as e:
-            print(f"[SPAWNER] WARNING: Could not connect container to network: {str(e)}")
+            logger.warning(f"[SPAWNER] Could not connect container to network: {str(e)}")
             if fatal:
                 container.remove(force=True)
                 raise Exception(f"Could not connect container to network '{network_name}': {str(e)}")
@@ -95,7 +98,7 @@ class ContainerManager:
         for spec in volume_specs:
             vol_name = self._build_volume_name(user_id, container_type, spec['name_suffix'])
             volumes[vol_name] = {'bind': spec['mount_path'], 'mode': 'rw'}
-            print(f"[SPAWNER]   Volume: {vol_name} -> {spec['mount_path']}")
+            logger.info(f"[SPAWNER]   Volume: {vol_name} -> {spec['mount_path']}")
 
         return volumes
 
@@ -105,7 +108,7 @@ class ContainerManager:
             container = self._get_client().containers.get(container_id)
             if container.status != 'running':
                 container.start()
-                print(f"[SPAWNER] Container {container_id[:12]} started")
+                logger.info(f"[SPAWNER] Container {container_id[:12]} started")
             return True
         except docker.errors.NotFound:
             return False
@@ -145,11 +148,11 @@ class ContainerManager:
             try:
                 volume = client.volumes.get(vol_name)
                 volume.remove(force=True)
-                print(f"[SPAWNER] Volume {vol_name} removed")
+                logger.info(f"[SPAWNER] Volume {vol_name} removed")
             except docker.errors.NotFound:
                 pass
             except Exception as e:
-                print(f"[SPAWNER] WARNING: Could not remove volume {vol_name}: {str(e)}")
+                logger.warning(f"[SPAWNER] Could not remove volume {vol_name}: {str(e)}")
 
     def get_container_status(self, container_id):
         """Gibt den Status eines Containers zurück (running, stopped, not_found, etc.)."""
@@ -193,16 +196,16 @@ class ContainerManager:
                 if old_container.status == 'running':
                     try:
                         old_container.stop(timeout=5)
-                        print(f"[SPAWNER] Old container {old_container.name} stopped")
+                        logger.info(f"[SPAWNER] Old container {old_container.name} stopped")
                     except Exception as e:
-                        print(f"[SPAWNER] WARNING: Could not stop old container: {str(e)}")
+                        logger.warning(f"[SPAWNER] Could not stop old container: {str(e)}")
                 try:
                     old_container.remove(force=True)
-                    print(f"[SPAWNER] Old container {old_container.name} removed (conflict prevention)")
+                    logger.info(f"[SPAWNER] Old container {old_container.name} removed (conflict prevention)")
                 except Exception as e:
-                    print(f"[SPAWNER] WARNING: Could not remove old container: {str(e)}")
+                    logger.warning(f"[SPAWNER] Could not remove old container: {str(e)}")
         except Exception as e:
-            print(f"[SPAWNER] WARNING: Error removing old containers: {str(e)}")
+            logger.warning(f"[SPAWNER] Error removing old containers: {str(e)}")
 
     def spawn_container(self, user_id, slug, container_type):
         """
@@ -226,13 +229,13 @@ class ContainerManager:
             if Config.TRAEFIK_ENABLED:
                 labels.update(self._build_traefik_labels(user_id, slug, container_type))
 
-            print(f"[SPAWNER] Creating {container_type} container {container_name}")
-            print(f"[SPAWNER] Image: {image}")
+            logger.info(f"[SPAWNER] Creating {container_type} container {container_name}")
+            logger.info(f"[SPAWNER] Image: {image}")
             if Config.TRAEFIK_ENABLED:
-                print(f"[SPAWNER] Traefik Labels:")
+                logger.info(f"[SPAWNER] Traefik Labels:")
                 for key, value in labels.items():
                     if 'traefik' in key:
-                        print(f"[SPAWNER]   {key}: {value}")
+                        logger.info(f"[SPAWNER]   {key}: {value}")
 
             # Build named volumes from template config
             volumes = self._build_volumes(user_id, container_type, template.get('volumes', []))
@@ -280,7 +283,7 @@ class ContainerManager:
             self._connect_container_to_network(container, network_name, fatal=Config.TRAEFIK_ENABLED)
 
             # Warte bis Container bereit ist
-            print(f"[SPAWNER] Waiting for container startup...")
+            logger.info(f"[SPAWNER] Waiting for container startup...")
             startup_wait = getattr(Config, 'CONTAINER_STARTUP_WAIT', 2)
             max_retries = 30
             retry_count = 0
@@ -288,12 +291,12 @@ class ContainerManager:
                 try:
                     container.reload()
                     if container.status == 'running':
-                        print(f"[SPAWNER] Container running, waiting {startup_wait}s for service startup...")
+                        logger.info(f"[SPAWNER] Container running, waiting {startup_wait}s for service startup...")
                         time.sleep(startup_wait)
-                        print(f"[SPAWNER] Container ready!")
+                        logger.info(f"[SPAWNER] Container ready!")
                         break
                 except Exception as e:
-                    print(f"[SPAWNER] Error during status check: {str(e)}")
+                    logger.warning(f"[SPAWNER] Error during status check: {str(e)}")
 
                 retry_count += 1
                 time.sleep(1)
@@ -307,25 +310,25 @@ class ContainerManager:
             if Config.TRAEFIK_ENABLED:
                 base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
                 slug_with_suffix = f"{slug}-{container_type}"
-                print(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
-                print(f"[SPAWNER] URL: {Config.PREFERRED_URL_SCHEME}://{base_host}/{slug_with_suffix}")
+                logger.info(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
+                logger.info(f"[SPAWNER] URL: {Config.PREFERRED_URL_SCHEME}://{base_host}/{slug_with_suffix}")
                 return container.id, 8080
             else:
                 host_port = self._get_assigned_port(container)
-                print(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
-                print(f"[SPAWNER] URL: http://localhost:{host_port}")
+                logger.info(f"[SPAWNER] {container_type.upper()} container created: {container.id[:12]}")
+                logger.info(f"[SPAWNER] URL: http://localhost:{host_port}")
                 return container.id, host_port or 8080
 
         except docker.errors.ImageNotFound:
             error_msg = f"Template image '{template['image']}' for type '{container_type}' not found"
-            print(f"[SPAWNER] ERROR: {error_msg}")
+            logger.error(f"[SPAWNER] {error_msg}")
             raise Exception(error_msg)
         except docker.errors.APIError as e:
             error_msg = f"Docker API error: {str(e)}"
-            print(f"[SPAWNER] ERROR: {error_msg}")
+            logger.error(f"[SPAWNER] {error_msg}")
             raise Exception(error_msg)
         except Exception as e:
-            print(f"[SPAWNER] ERROR: {str(e)}")
+            logger.error(f"[SPAWNER] {str(e)}")
             raise
 
     # Backward compatibility alias

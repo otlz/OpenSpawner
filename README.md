@@ -78,11 +78,12 @@ OpenSpawner kommt mit fertigen Container-Templates:
 
 | Template | Beschreibung |
 |----------|-------------|
-| `template-01` | Nginx Basic — einfache statische Seite |
-| `template-02` | Nginx Advanced |
-| `template-next` | Next.js React-Anwendung |
+| `template-nginx` | Nginx — einfache statische Seite |
+| `template-nextjs` | Next.js React-Anwendung |
 | `template-dictionary` | Python Flask Dictionary App |
 | `template-vcoder` | Web IDE mit PlatformIO für ESP8266 |
+| `template-vscode` | Saubere VS Code Instanz |
+| `template-office` | LibreOffice im Browser |
 
 ### Eigenes Template erstellen
 

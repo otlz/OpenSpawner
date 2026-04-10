@@ -19,7 +19,9 @@ class Config:
     # JWT configuration
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
     JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))  # 1 hour
-    JWT_TOKEN_LOCATION = ['headers']
+    JWT_TOKEN_LOCATION = ['cookies', 'headers']
+    JWT_ACCESS_COOKIE_NAME = 'spawner_token'
+    JWT_COOKIE_CSRF_PROTECT = False  # SameSite=Strict handles CSRF
     JWT_HEADER_NAME = 'Authorization'
     JWT_HEADER_TYPE = 'Bearer'
 
@@ -47,7 +49,7 @@ class Config:
     DOCKER_SOCKET = os.getenv('DOCKER_SOCKET', 'unix://var/run/docker.sock')
 
     # Legacy-Fallback für Backward-Kompatibilität (models.py)
-    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'template-01:latest')
+    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'template-nginx:latest')
 
     # Wartezeit nach Container-Start (Sekunden)
     CONTAINER_STARTUP_WAIT = int(os.getenv('CONTAINER_STARTUP_WAIT', 2))
@@ -63,7 +65,7 @@ class Config:
 
     @staticmethod
     def _extract_type_from_image(image_name: str) -> str:
-        """Extrahiert den Container-Typ aus dem Image-Namen (z.B. 'template-01:latest' -> 'template-01')."""
+        """Extrahiert den Container-Typ aus dem Image-Namen (z.B. 'template-nginx:latest' -> 'template-nginx')."""
         return image_name.split(':')[0]
 
     @staticmethod
@@ -71,7 +73,7 @@ class Config:
         """Lädt die Template-Image-Liste aus USER_TEMPLATE_IMAGES (Semikolon-getrennt)."""
         raw_images = os.getenv('USER_TEMPLATE_IMAGES', '')
         if not raw_images:
-            return ['template-01:latest']
+            return ['template-nginx:latest']
         return [img.strip() for img in raw_images.split(';') if img.strip()]
 
     @staticmethod
@@ -192,7 +194,7 @@ class Config:
     # ========================================
     # Debug & Administration
     # ========================================
-    DEBUG_TOKEN = os.getenv('DEBUG_TOKEN', '')  # For admin debug API
+    DEBUG_TOKEN = os.getenv('DEBUG_TOKEN') or None  # For admin debug API
 
 
 class DevelopmentConfig(Config):

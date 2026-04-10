@@ -97,7 +97,7 @@ export default function DashboardPage() {
         window.open(data.service_url, "_blank");
         await loadContainers();
       } else if (apiError) {
-        if (apiError.includes("Administrator")) {
+        if (apiError.includes("blocked")) {
           toast.error("Dieser Container wurde von einem Administrator gesperrt", {
             description: "Kontaktiere einen Administrator für mehr Informationen",
           });
@@ -211,7 +211,7 @@ export default function DashboardPage() {
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-80" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardHeader className="p-4 pb-2">
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                   </div>
                   <Skeleton className="h-3 w-36" />
                   <div className="flex gap-1.5 pt-1">
-                    <Skeleton className="h-8 w-24 rounded-md" />
+                    <Skeleton className="h-7 w-20 rounded" />
                   </div>
                 </div>
               </CardContent>
@@ -259,7 +259,7 @@ export default function DashboardPage() {
       )}
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardHeader className="p-4 pb-2">
@@ -280,7 +280,7 @@ export default function DashboardPage() {
                   </div>
                   <Skeleton className="h-3 w-36" />
                   <div className="flex gap-1.5 pt-1">
-                    <Skeleton className="h-8 w-24 rounded-md" />
+                    <Skeleton className="h-7 w-20 rounded" />
                   </div>
                 </div>
               </CardContent>
@@ -288,7 +288,7 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {containers.map((container) => {
             const isBlocked = container.is_blocked === true;
             const busy = isActionInProgress(container.type);
@@ -296,7 +296,7 @@ export default function DashboardPage() {
             return (
               <Card
                 key={container.type}
-                className={`relative transition-all ${
+                className={`relative transition-all flex flex-col ${
                   isBlocked ? "border-red-500 bg-red-50" : ""
                 }`}
               >
@@ -323,7 +323,7 @@ export default function DashboardPage() {
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="p-4 pt-2">
+                <CardContent className="p-4 pt-2 flex-1 flex flex-col">
                   <div className="space-y-3">
                     {/* Metadata */}
                     {(container.os || container.software) && (
@@ -358,17 +358,18 @@ export default function DashboardPage() {
                         {new Date(container.blocked_at).toLocaleString("de-DE")}
                       </div>
                     )}
+                  </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5 pt-3 mt-auto">
                       {isBlocked ? (
-                        <Button size="sm" variant="destructive" disabled>
+                        <Button size="xs" variant="destructive" disabled>
                           <ShieldAlert className="h-4 w-4" />
                           Gesperrt
                         </Button>
                       ) : container.status === "not_created" ? (
                         <Button
-                          size="sm"
+                          size="xs"
                           onClick={() => handleLaunchContainer(container.type)}
                           disabled={busy}
                         >
@@ -388,7 +389,7 @@ export default function DashboardPage() {
                         <>
                           {container.status === "running" && (
                             <Button
-                              size="sm"
+                              size="xs"
                               onClick={() => window.open(container.service_url, "_blank")}
                               disabled={busy}
                             >
@@ -399,7 +400,7 @@ export default function DashboardPage() {
 
                           {container.status !== "running" && (
                             <Button
-                              size="sm"
+                              size="xs"
                               onClick={() => handleLaunchContainer(container.type)}
                               disabled={busy}
                             >
@@ -414,7 +415,7 @@ export default function DashboardPage() {
 
                           {container.status === "running" && (
                             <Button
-                              size="sm"
+                              size="xs"
                               variant="outline"
                               onClick={() => handleRestartContainer(container.type)}
                               disabled={busy}
@@ -430,7 +431,7 @@ export default function DashboardPage() {
 
                           {container.status === "running" && (
                             <Button
-                              size="sm"
+                              size="xs"
                               variant="outline"
                               onClick={() => handleStopContainer(container.type)}
                               disabled={busy}
@@ -446,7 +447,7 @@ export default function DashboardPage() {
 
                           {container.status === "error" && (
                             <Button
-                              size="sm"
+                              size="xs"
                               variant="outline"
                               onClick={() => handleRestartContainer(container.type)}
                               disabled={busy}
@@ -461,9 +462,9 @@ export default function DashboardPage() {
                           )}
 
                           <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            size="xs"
+                            variant="outline"
+                            className="text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10"
                             onClick={() => setDeleteTarget(container.type)}
                             disabled={busy}
                           >
@@ -477,7 +478,6 @@ export default function DashboardPage() {
                         </>
                       )}
                     </div>
-                  </div>
                 </CardContent>
               </Card>
             );

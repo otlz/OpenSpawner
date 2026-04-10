@@ -13,17 +13,10 @@ async function fetchApi<T>(
   endpoint: string,
   options: FetchApiOptions = {}
 ): Promise<ApiResponse<T>> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...options.headers,
   };
-
-  if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-  }
 
   let url = `${API_BASE}${endpoint}`;
 
@@ -37,6 +30,7 @@ async function fetchApi<T>(
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: "include",
     });
 
     const data = await response.json();
@@ -70,8 +64,6 @@ export interface User {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  token_type: string;
   expires_in: number;
   user: User;
 }

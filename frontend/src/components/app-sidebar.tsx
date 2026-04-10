@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Home, Package, Shield } from 'lucide-react'
+import { Github, Home, Package, Shield } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import Link from 'next/link'
 
@@ -45,6 +45,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={navMain} />
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <a href="https://github.com/otlz/OpenSpawner" target="_blank" rel="noopener noreferrer">
+                <Github className="size-4" />
+                <span>GitHub</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser />
       </SidebarFooter>
     </Sidebar>

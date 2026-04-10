@@ -13,7 +13,6 @@ export type User = ApiUser;
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
@@ -29,36 +28,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) {
-      setToken(storedToken);
-      fetchUser(storedToken);
-    } else {
-      setIsLoading(false);
-    }
+    fetchUser();
   }, []);
 
-  const fetchUser = async (accessToken?: string) => {
-    const currentToken = accessToken || token;
-    if (!currentToken) {
-      setIsLoading(false);
-      return;
-    }
-
+  const fetchUser = async () => {
     const { data, error: apiError } = await api.getUser();
     if (data && !apiError) {
       setUser(data.user);
       setError(null);
     } else {
-      localStorage.removeItem("token");
-      setToken(null);
       setUser(null);
-      setError(apiError || null);
     }
     setIsLoading(false);
   };
@@ -110,8 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data) {
-        localStorage.setItem("token", data.access_token);
-        setToken(data.access_token);
         setUser(data.user);
         return { success: true };
       }
@@ -135,8 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data) {
-        localStorage.setItem("token", data.access_token);
-        setToken(data.access_token);
         setUser(data.user);
         return { success: true };
       }
@@ -151,8 +130,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await api.auth.logout();
-    localStorage.removeItem("token");
-    setToken(null);
     setUser(null);
     setError(null);
   };
@@ -165,9 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        token,
         isLoading,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user,
         error,
         login,
         signup,

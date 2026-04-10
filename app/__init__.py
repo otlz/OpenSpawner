@@ -23,6 +23,14 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Validate security config in production (non-localhost)
+    if Config.BASE_DOMAIN != 'localhost':
+        if Config.SECRET_KEY == 'dev-secret-key-change-in-production':
+            raise RuntimeError(
+                "CRITICAL: SECRET_KEY must be changed in production. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)

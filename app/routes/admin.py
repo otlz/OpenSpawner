@@ -2,6 +2,7 @@
 Admin-API-Blueprint.
 Alle Endpunkte erfordern Admin-Rechte (außer /debug mit Debug-Token).
 """
+import hmac
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
@@ -533,19 +534,22 @@ def _check_debug_auth():
     debug_token = current_app.config.get('DEBUG_TOKEN')
     provided_token = request.headers.get('X-Debug-Token')
 
-    # JWT-Auth versuchen
-    is_admin = False
+    # Check Debug Token first (if configured) — timing-safe comparison
+    if debug_token and provided_token and hmac.compare_digest(provided_token, debug_token):
+        return True
+
+    # Check JWT admin auth
     try:
         from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
         verify_jwt_in_request(optional=True)
         user_id = get_jwt_identity()
         if user_id:
             user = User.query.get(int(user_id))
-            is_admin = user and user.is_admin
-    except Exception:
-        pass
+            return user is not None and user.is_admin
+    except Exception as e:
+        current_app.logger.warning(f"[DEBUG] Auth check failed: {e}")
 
-    return is_admin or (debug_token and provided_token == debug_token)
+    return False
 
 
 def _debug_view_logs():
@@ -586,7 +590,8 @@ def _debug_clear_logs():
 
 def _debug_delete_email():
     """Löscht einen Benutzer anhand der E-Mail-Adresse (inkl. Container)."""
-    email = request.args.get('email', '').strip()
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip()
     if not email:
         return jsonify({'error': 'Required parameter: email'}), 400
 
@@ -624,7 +629,8 @@ def _debug_delete_email():
 
 def _debug_delete_token():
     """Löscht alle Magic-Link-Tokens eines Benutzers."""
-    email = request.args.get('email', '').strip()
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip()
     if not email:
         return jsonify({'error': 'Required parameter: email'}), 400
 
@@ -687,10 +693,10 @@ def _debug_info():
             'info': 'This help'
         },
         'examples': [
-            'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
-            'GET /api/admin/debug?action=list-users -H "X-Debug-Token: xxx"',
-            'GET /api/admin/debug?action=delete-email&email=test@example.com',
-            'GET /api/admin/debug?action=delete-token&email=test@example.com'
+            'POST /api/admin/debug -H "X-Debug-Token: xxx" -d \'{"action":"view-logs"}\'',
+            'POST /api/admin/debug -H "X-Debug-Token: xxx" -d \'{"action":"list-users"}\'',
+            'POST /api/admin/debug -d \'{"action":"delete-email","email":"test@example.com"}\'',
+            'POST /api/admin/debug -d \'{"action":"delete-token","email":"test@example.com"}\''
         ]
     }), 200
 
@@ -706,15 +712,16 @@ _DEBUG_HANDLERS = {
 }
 
 
-@admin_bp.route('/debug', methods=['GET', 'POST'])
+@admin_bp.route('/debug', methods=['POST'])
 def debug_management():
-    """Debug-Endpunkt für Logs und Datenbankbereinigung (Dispatch-Pattern)."""
+    """Debug-Endpunkt für Logs und Datenbankbereinigung (Dispatch-Pattern). POST only."""
     if not _check_debug_auth():
         return jsonify({'error': 'Authentication required (JWT or X-Debug-Token header)'}), 403
 
-    action = request.args.get('action', '').lower()
+    data = request.get_json(silent=True) or {}
+    action = data.get('action', '').lower()
 
-    # Kein Action angegeben → Info anzeigen
+    # No action provided → show info
     if not action:
         return _debug_info()
 

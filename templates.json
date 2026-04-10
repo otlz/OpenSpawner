@@ -1,9 +1,9 @@
 {
   "templates": [
     {
-      "type": "template-01",
-      "image": "template-01:latest",
-      "display_name": "Nginx Basic",
+      "type": "template-nginx",
+      "image": "template-nginx:latest",
+      "display_name": "Nginx",
       "description": "Einfacher Nginx-Server mit statischen Dateien und Willkommensseite",
       "os": "Alpine Linux",
       "software": "Nginx 1.25",
@@ -15,22 +15,8 @@
       "pids_limit": 32
     },
     {
-      "type": "template-02",
-      "image": "template-02:latest",
-      "display_name": "Nginx Advanced",
-      "description": "Nginx mit erweiterten Funktionen und Konfigurationen",
-      "os": "Alpine Linux",
-      "software": "Nginx 1.25",
-      "icon": "SiNginx",
-      "port": 8080,
-      "volumes": [],
-      "memory_limit": "64m",
-      "cpu_quota": 25000,
-      "pids_limit": 32
-    },
-    {
-      "type": "template-next",
-      "image": "template-next:latest",
+      "type": "template-nextjs",
+      "image": "template-nextjs:latest",
       "display_name": "Next.js Production",
       "description": "React-Anwendung mit Shadcn/UI, TypeScript und modernem Build-Setup",
       "os": "Debian",
@@ -43,7 +29,7 @@
       "pids_limit": 64
     },
     {
-      "type": "dictionary",
+      "type": "template-dictionary",
       "image": "template-dictionary:latest",
       "display_name": "Wörterbuch",
       "description": "Persönliches Wörterbuch mit Datenbank — Wörter und Definitionen speichern",
@@ -59,7 +45,7 @@
       "pids_limit": 50
     },
     {
-      "type": "vcoder",
+      "type": "template-vcoder",
       "image": "template-vcoder:latest",
       "display_name": "ESP8266 IDE",
       "description": "Web-IDE mit PlatformIO für ESP8266/Wemos-Entwicklung",
@@ -75,6 +61,39 @@
       "cpu_quota": 50000,
       "pids_limit": 256,
       "cap_add": ["SYS_PTRACE"]
+    },
+    {
+      "type": "template-vscode",
+      "image": "template-vscode:latest",
+      "display_name": "VS Code",
+      "description": "Saubere VS Code Instanz — Erweiterungen selbst installieren",
+      "os": "Debian",
+      "software": "Code Server",
+      "icon": "SiVisualstudiocode",
+      "port": 8080,
+      "volumes": [
+        { "name_suffix": "workspace", "mount_path": "/home/coder/project" }
+      ],
+      "memory_limit": "512m",
+      "cpu_quota": 50000,
+      "pids_limit": 128
+    },
+    {
+      "type": "template-office",
+      "image": "template-office:latest",
+      "display_name": "LibreOffice",
+      "description": "Office-Paket im Browser — Writer, Calc, Impress",
+      "os": "Debian",
+      "software": "LibreOffice",
+      "icon": "SiLibreoffice",
+      "port": 8080,
+      "volumes": [
+        { "name_suffix": "config", "mount_path": "/config" }
+      ],
+      "memory_limit": "1g",
+      "cpu_quota": 50000,
+      "pids_limit": 256,
+      "cap_add": ["FOWNER", "DAC_OVERRIDE", "SYS_CHROOT"]
     }
   ]
 }

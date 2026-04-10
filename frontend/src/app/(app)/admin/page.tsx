@@ -493,16 +493,16 @@ export default function AdminPage() {
         <TabsList className="mb-6 grid w-fit grid-cols-3">
           <TabsTrigger value="users">
             <Users className="mr-1.5 h-3.5 w-3.5" />
-            User-Verwaltung
+            Benutzer
           </TabsTrigger>
           <TabsTrigger value="containers">
             <Container className="mr-1.5 h-3.5 w-3.5" />
-            Container-Verwaltung
+            Container
           </TabsTrigger>
           {user?.role === 'admin' && (
             <TabsTrigger value="email-rules">
               <Mail className="mr-1.5 h-3.5 w-3.5" />
-              E-Mail-Regeln
+              Registrierung
             </TabsTrigger>
           )}
         </TabsList>

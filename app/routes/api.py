@@ -32,6 +32,15 @@ token_blacklist = set()
 # Hilfsfunktionen
 # ============================================================
 
+def _get_current_user():
+    """Gets the current authenticated user from JWT identity. Returns (user, error_response)."""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user:
+        return None, (jsonify({'error': 'User not found'}), 404)
+    return user, None
+
+
 def _get_service_url(slug_or_path, container_port=None):
     """Erstellt die Service-URL je nach Modus (Traefik vs. lokaler Port)."""
     if Config.TRAEFIK_ENABLED:
@@ -90,24 +99,23 @@ def _create_jwt_response(user):
 def _create_auth_response(access_token, user_data, expires_in):
     """Erstellt eine JSON-Response mit JWT als HttpOnly-Cookie."""
     response_data = {
-        'access_token': access_token,
-        'token_type': 'Bearer',
         'expires_in': expires_in,
         'user': user_data
     }
 
     response = make_response(jsonify(response_data))
 
-    # HttpOnly: kein JS-Zugriff, Secure: nur HTTPS, SameSite: CSRF-Schutz
+    # HttpOnly: no JS access, Secure: HTTPS only (except localhost), SameSite: CSRF protection
+    is_localhost = Config.BASE_DOMAIN == 'localhost'
     response.set_cookie(
         'spawner_token',
         access_token,
         max_age=expires_in,
         httponly=True,
-        secure=True,
-        samesite='Lax',
+        secure=not is_localhost,
+        samesite='Strict',
         path='/',
-        domain=f".{Config.BASE_DOMAIN}"
+        domain=None if is_localhost else f".{Config.BASE_DOMAIN}"
     )
 
     return response
@@ -250,14 +258,15 @@ def api_signup():
         # Add random suffix
         slug = slug + generate_magic_link_token()[:4]
 
-    # Check if this is the first user -> becomes admin
-    is_first_user = User.query.count() == 0
-
     user = User(email=email, slug=slug)
     user.state = UserState.REGISTERED.value
-    user.role = UserRole.ADMIN.value if is_first_user else UserRole.USER.value
+    user.role = UserRole.USER.value  # Default to user
     db.session.add(user)
     db.session.flush()  # So that user.id is available
+
+    # First user becomes admin (check after flush to reduce race window)
+    if User.query.count() == 1:
+        user.role = UserRole.ADMIN.value
 
     # Generate magic link token
     token = generate_magic_link_token()
@@ -381,8 +390,15 @@ def api_logout():
         current_app.logger.warning(f"[LOGOUT] Failed to stop containers: {str(e)}")
 
     # Create response and delete cookie
+    is_localhost = Config.BASE_DOMAIN == 'localhost'
     response = make_response(jsonify({'message': 'Successfully logged out'}))
-    response.delete_cookie('spawner_token', path='/')
+    response.delete_cookie(
+        'spawner_token',
+        path='/',
+        domain=None if is_localhost else f".{Config.BASE_DOMAIN}",
+        samesite='Strict',
+        secure=not is_localhost,
+    )
 
     return response, 200
 
@@ -391,11 +407,9 @@ def api_logout():
 @jwt_required()
 def api_user_me():
     """Gibt aktuelle Benutzer- und Container-Informationen zurück."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     # Calculate service URL
     service_url = _get_service_url(user.slug, user.container_port)
@@ -433,11 +447,9 @@ def api_user_me():
 @jwt_required()
 def api_container_status():
     """Gibt den Container-Status des Benutzers zurück."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     container_status = 'no_container'
     if user.container_id:
@@ -457,11 +469,9 @@ def api_container_status():
 @jwt_required()
 def api_container_restart():
     """Startet den Primär-Container des Benutzers neu (stop + start, preserves data)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     orchestrator = ContainerOrchestrator()
     default_template = _get_default_template()
@@ -509,20 +519,18 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 @jwt_required()
 def api_user_containers():
     """Gibt alle Container des Benutzers zurück (Multi-Container-Unterstützung)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
+    user, err = _get_current_user()
+    if err:
+        return err
 
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-
-    # Build container list
+    # Build container list (single query instead of N+1)
+    all_user_containers = {
+        uc.container_type: uc
+        for uc in UserContainer.query.filter_by(user_id=user.id).all()
+    }
     containers = []
     for container_type, template in current_app.config['CONTAINER_TEMPLATES'].items():
-        # Find existing container
-        user_container = UserContainer.query.filter_by(
-            user_id=user.id,
-            container_type=container_type
-        ).first()
+        user_container = all_user_containers.get(container_type)
 
         # Service URL
         container_port = user_container.container_port if user_container else None
@@ -576,11 +584,9 @@ def api_user_containers():
 @jwt_required()
 def api_container_launch(container_type):
     """Erstellt oder startet einen Container on-demand (stop+start, kein recreate)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     if container_type not in current_app.config['CONTAINER_TEMPLATES']:
         return jsonify({'error': f'Invalid container type: {container_type}'}), 400
@@ -619,11 +625,9 @@ def api_container_launch(container_type):
 @jwt_required()
 def api_container_stop(container_type):
     """Stoppt einen laufenden Container des Benutzers (Daten bleiben erhalten)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     if container_type not in current_app.config['CONTAINER_TEMPLATES']:
         return jsonify({'error': f'Invalid container type: {container_type}'}), 400
@@ -634,30 +638,28 @@ def api_container_stop(container_type):
     ).first()
 
     if not user_container or not user_container.container_id:
-        return jsonify({'error': 'Kein Container vorhanden'}), 404
+        return jsonify({'error': 'No container found'}), 404
 
     if user_container.is_blocked:
-        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+        return jsonify({'error': 'This container has been blocked by an administrator'}), 403
 
     try:
         orchestrator = ContainerOrchestrator()
         orchestrator.stop(user_container)
         current_app.logger.info(f"[SPAWNER] Container {user_container.container_id[:12]} stopped by user {user.email}")
-        return jsonify({'message': 'Container gestoppt', 'status': 'stopped'}), 200
+        return jsonify({'message': 'Container stopped', 'status': 'stopped'}), 200
     except Exception as e:
         current_app.logger.error(f"Container stop failed: {str(e)}")
-        return jsonify({'error': f'Container konnte nicht gestoppt werden: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to stop container: {str(e)}'}), 500
 
 
 @api_bp.route('/container/<container_type>', methods=['DELETE'])
 @jwt_required()
 def api_container_delete(container_type):
     """Löscht einen Container des Benutzers (Container + DB-Eintrag, Volumes optional)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     if container_type not in current_app.config['CONTAINER_TEMPLATES']:
         return jsonify({'error': f'Invalid container type: {container_type}'}), 400
@@ -668,31 +670,29 @@ def api_container_delete(container_type):
     ).first()
 
     if not user_container:
-        return jsonify({'error': 'Kein Container vorhanden'}), 404
+        return jsonify({'error': 'No container found'}), 404
 
     if user_container.is_blocked:
-        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+        return jsonify({'error': 'This container has been blocked by an administrator'}), 403
 
     try:
         delete_volumes = request.args.get('delete_volumes', 'false').lower() == 'true'
         orchestrator = ContainerOrchestrator()
         orchestrator.destroy(user_container, delete_volumes=delete_volumes)
         current_app.logger.info(f"[SPAWNER] Container {container_type} deleted by user {user.email}")
-        return jsonify({'message': 'Container gelöscht'}), 200
+        return jsonify({'message': 'Container deleted'}), 200
     except Exception as e:
         current_app.logger.error(f"Container delete failed: {str(e)}")
-        return jsonify({'error': f'Container konnte nicht gelöscht werden: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to delete container: {str(e)}'}), 500
 
 
 @api_bp.route('/container/restart/<container_type>', methods=['POST'])
 @jwt_required()
 def api_container_restart_type(container_type):
     """Startet einen Container neu (docker restart, Daten bleiben erhalten)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     if container_type not in current_app.config['CONTAINER_TEMPLATES']:
         return jsonify({'error': f'Invalid container type: {container_type}'}), 400
@@ -703,7 +703,7 @@ def api_container_restart_type(container_type):
     ).first()
 
     if user_container and user_container.is_blocked:
-        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+        return jsonify({'error': 'This container has been blocked by an administrator'}), 403
 
     orchestrator = ContainerOrchestrator()
 
@@ -724,25 +724,23 @@ def api_container_restart_type(container_type):
         service_url = _get_service_url(slug_with_suffix, user_container.container_port)
 
         return jsonify({
-            'message': 'Container neugestartet',
+            'message': 'Container restarted',
             'container_id': user_container.container_id,
             'service_url': service_url,
             'status': 'running'
         }), 200
     except Exception as e:
         current_app.logger.error(f"Container restart failed: {str(e)}")
-        return jsonify({'error': f'Container konnte nicht neugestartet werden: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to restart container: {str(e)}'}), 500
 
 
 @api_bp.route('/container/recreate/<container_type>', methods=['POST'])
 @jwt_required()
 def api_container_recreate(container_type):
     """Erstellt einen Container komplett neu (destroy + create, für Image-Updates)."""
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user, err = _get_current_user()
+    if err:
+        return err
 
     if container_type not in current_app.config['CONTAINER_TEMPLATES']:
         return jsonify({'error': f'Invalid container type: {container_type}'}), 400
@@ -753,7 +751,7 @@ def api_container_recreate(container_type):
     ).first()
 
     if user_container and user_container.is_blocked:
-        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+        return jsonify({'error': 'This container has been blocked by an administrator'}), 403
 
     orchestrator = ContainerOrchestrator()
 
@@ -770,14 +768,14 @@ def api_container_recreate(container_type):
         service_url = _get_service_url(slug_with_suffix, user_container.container_port)
 
         return jsonify({
-            'message': 'Container neu erstellt',
+            'message': 'Container recreated',
             'container_id': user_container.container_id,
             'service_url': service_url,
             'status': 'running'
         }), 200
     except Exception as e:
         current_app.logger.error(f"Container recreate failed: {str(e)}")
-        return jsonify({'error': f'Container konnte nicht neu erstellt werden: {str(e)}'}), 500
+        return jsonify({'error': f'Failed to recreate container: {str(e)}'}), 500
 
 
 @api_bp.route('/container/heartbeat/<container_type>', methods=['POST'])

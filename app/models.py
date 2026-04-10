@@ -68,7 +68,7 @@ class User(UserMixin, db.Model):
             from config import Config
             primary = UserContainer(
                 user_id=self.id,
-                container_type='template-01',
+                container_type='template-nginx',
                 template_image=Config.USER_TEMPLATE_IMAGE
             )
             db.session.add(primary)
@@ -91,7 +91,7 @@ class User(UserMixin, db.Model):
             from config import Config
             primary = UserContainer(
                 user_id=self.id,
-                container_type='template-01',
+                container_type='template-nginx',
                 template_image=Config.USER_TEMPLATE_IMAGE
             )
             db.session.add(primary)
