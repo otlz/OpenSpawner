@@ -2,8 +2,8 @@
 
 /**
  * E-Mail-Regeln-Tab: Whitelist/Blacklist-Verwaltung.
- * Admin kann Muster hinzufuegen, suchen und loeschen.
- * Wildcards (*) werden unterstuetzt, z.B. *@school.de
+ * Admin kann Muster hinzufügen, suchen und löschen.
+ * Wildcards (*) werden unterstützt, z.B. *@school.de
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -71,13 +71,13 @@ export default function EmailRulesTab() {
   };
 
   const handleDeleteRule = async (ruleId: number, pattern: string) => {
-    if (!confirm(`Regel "${pattern}" wirklich loeschen?`)) return;
+    if (!confirm(`Regel "${pattern}" wirklich löschen?`)) return;
 
     const { error } = await adminApi.deleteEmailRule(ruleId);
     if (error) {
       toast.error(`Fehler: ${error}`);
     } else {
-      toast.success(`Regel geloescht: ${pattern}`);
+      toast.success(`Regel gelöscht: ${pattern}`);
       fetchRules();
     }
   };
@@ -112,7 +112,7 @@ export default function EmailRulesTab() {
         </CardContent>
       </Card>
 
-      {/* Neue Regel hinzufuegen */}
+      {/* Neue Regel hinzufügen */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Neue Regel</CardTitle>
@@ -148,7 +148,7 @@ export default function EmailRulesTab() {
             </div>
             <Button onClick={handleAddRule} disabled={isAdding || !newPattern.trim()}>
               {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-              Hinzufuegen
+              Hinzufügen
             </Button>
           </div>
         </CardContent>

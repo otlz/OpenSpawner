@@ -12,13 +12,13 @@ export default function VerifyLoginPage() {
     <VerifyTokenPage
       config={{
         verifyFn: verifyLogin,
-        loadingTitle: "Logging in...",
-        loadingText: "Please wait, logging you in...",
-        successTitle: "Login successful!",
-        successDescription: "Redirecting to dashboard",
-        errorTitle: "Login failed",
-        errorFallbackText: "Login failed. Please request a new link.",
-        errorLinkText: "Request new link",
+        loadingTitle: "Anmeldung läuft...",
+        loadingText: "Bitte warten, du wirst angemeldet...",
+        successTitle: "Anmeldung erfolgreich!",
+        successDescription: "Weiterleitung zum Dashboard",
+        errorTitle: "Anmeldung fehlgeschlagen",
+        errorFallbackText: "Anmeldung fehlgeschlagen. Bitte fordere einen neuen Link an.",
+        errorLinkText: "Neuen Link anfordern",
         errorLinkHref: "/login",
       }}
     />

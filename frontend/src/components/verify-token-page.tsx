@@ -43,7 +43,7 @@ function VerifyTokenContent({ config }: { config: VerifyTokenPageConfig }) {
     const token = searchParams.get("token");
     if (!token) {
       setStatus("error");
-      setError("No token found");
+      setError("Kein Token gefunden");
       return;
     }
 
@@ -105,10 +105,10 @@ function VerifyTokenContent({ config }: { config: VerifyTokenPageConfig }) {
           {status === "success" && (
             <div className="space-y-4">
               <p className="text-center text-muted-foreground">
-                You will be redirected to the dashboard automatically.
+                Du wirst automatisch zum Dashboard weitergeleitet.
               </p>
               <Button className="w-full" onClick={() => router.push("/dashboard")}>
-                Go to Dashboard
+                Zum Dashboard
               </Button>
             </div>
           )}

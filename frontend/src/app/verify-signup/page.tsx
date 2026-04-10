@@ -12,13 +12,13 @@ export default function VerifySignupPage() {
     <VerifyTokenPage
       config={{
         verifyFn: verifySignup,
-        loadingTitle: "Verifying...",
-        loadingText: "Please wait, verifying your account...",
-        successTitle: "Account created!",
-        successDescription: "Your account has been created and verified",
-        errorTitle: "Verification failed",
-        errorFallbackText: "Verification failed. Please request a new link.",
-        errorLinkText: "Back to Login",
+        loadingTitle: "Verifizierung läuft...",
+        loadingText: "Bitte warten, dein Konto wird verifiziert...",
+        successTitle: "Konto erstellt!",
+        successDescription: "Dein Konto wurde erstellt und verifiziert",
+        errorTitle: "Verifizierung fehlgeschlagen",
+        errorFallbackText: "Verifizierung fehlgeschlagen. Bitte fordere einen neuen Link an.",
+        errorLinkText: "Zurück zum Login",
         errorLinkHref: "/login",
       }}
     />

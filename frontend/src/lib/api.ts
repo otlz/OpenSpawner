@@ -42,12 +42,12 @@ async function fetchApi<T>(
     const data = await response.json();
 
     if (!response.ok) {
-      return { error: data.error || "An error occurred" };
+      return { error: data.error || "Ein Fehler ist aufgetreten" };
     }
 
     return { data };
   } catch (error) {
-    return { error: "Network error - server not reachable" };
+    return { error: "Netzwerkfehler — Server nicht erreichbar" };
   }
 }
 

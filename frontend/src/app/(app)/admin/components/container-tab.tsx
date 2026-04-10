@@ -139,11 +139,11 @@ export default function ContainerTab({
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status:</span>
                       <span className="font-medium">
-                        {container.container_id ? "Running" : "Stopped"}
+                        {container.container_id ? "Läuft" : "Gestoppt"}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">erstellt:</span>
+                      <span className="text-muted-foreground">Erstellt:</span>
                       <span className="font-mono text-xs">
                         {container.created_at
                           ? new Date(container.created_at).toLocaleDateString("de-DE")

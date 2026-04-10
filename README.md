@@ -78,15 +78,15 @@ OpenSpawner kommt mit fertigen Container-Templates:
 
 | Template | Beschreibung |
 |----------|-------------|
-| `user-template-01` | Nginx Basic — einfache statische Seite |
-| `user-template-02` | Nginx Advanced |
-| `user-template-next` | Next.js React-Anwendung |
-| `user-template-dictionary` | Python Flask Dictionary App |
-| `user-template-vcoder` | Web IDE mit PlatformIO für ESP8266 |
+| `template-01` | Nginx Basic — einfache statische Seite |
+| `template-02` | Nginx Advanced |
+| `template-next` | Next.js React-Anwendung |
+| `template-dictionary` | Python Flask Dictionary App |
+| `template-vcoder` | Web IDE mit PlatformIO für ESP8266 |
 
 ### Eigenes Template erstellen
 
-1. Verzeichnis `templates/user-template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
+1. Verzeichnis `templates/template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
 2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufügen
 3. Metadaten in `templates.json` eintragen
 4. Bauen: `docker compose --profile build build`

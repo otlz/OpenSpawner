@@ -72,28 +72,28 @@ services:
 
   # User container templates (built once, spawned per user)
   template-01:
-    build: ./templates/user-template-01
-    image: user-template-01:latest
+    build: ./templates/template-01
+    image: template-01:latest
     profiles: ["build"]
 
   template-02:
-    build: ./templates/user-template-02
-    image: user-template-02:latest
+    build: ./templates/template-02
+    image: template-02:latest
     profiles: ["build"]
 
   template-next:
-    build: ./templates/user-template-next
-    image: user-template-next:latest
+    build: ./templates/template-next
+    image: template-next:latest
     profiles: ["build"]
 
   template-dictionary:
-    build: ./templates/user-template-dictionary
-    image: user-template-dictionary:latest
+    build: ./templates/template-dictionary
+    image: template-dictionary:latest
     profiles: ["build"]
 
   template-vcoder:
-    build: ./templates/user-template-vcoder
-    image: user-template-vcoder:latest
+    build: ./templates/template-vcoder
+    image: template-vcoder:latest
     profiles: ["build"]
 
 volumes:

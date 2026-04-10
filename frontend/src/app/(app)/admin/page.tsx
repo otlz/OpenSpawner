@@ -45,6 +45,7 @@ import {
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import StatsCards from "./components/stats-cards";
 import ContainerTab from "./components/container-tab";
 import DeleteDialog from "./components/delete-dialog";
@@ -413,9 +414,58 @@ export default function AdminPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <>
+        <div className="mb-6">
+          <Skeleton className="h-8 w-44 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Skeleton className="h-10 w-[28rem] rounded-lg mb-6" />
+        <div className="mb-6 grid gap-4 md:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <Skeleton className="h-8 w-8 rounded" />
+                <div>
+                  <Skeleton className="h-7 w-10 mb-1" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="mb-6 flex items-center gap-4">
+          <Skeleton className="h-10 flex-1 max-w-md rounded-md" />
+          <Skeleton className="h-10 w-36 rounded-md" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-24 mb-1" />
+            <Skeleton className="h-4 w-44" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div>
+                        <Skeleton className="h-4 w-48 mb-2" />
+                        <Skeleton className="h-3 w-64" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-8 w-8 rounded" />
+                      <Skeleton className="h-8 w-8 rounded" />
+                      <Skeleton className="h-8 w-8 rounded" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </>
     );
   }
 
@@ -667,7 +717,7 @@ export default function AdminPage() {
                                     {container.is_blocked && <Badge variant="destructive" className="text-xs">Gesperrt</Badge>}
                                   </div>
                                   <span className="text-xs text-muted-foreground">
-                                    {container.container_id ? "Running" : "Stopped"} - {formatDate(container.created_at)}
+                                    {container.container_id ? "Läuft" : "Gestoppt"} - {formatDate(container.created_at)}
                                   </span>
                                 </div>
                               </div>

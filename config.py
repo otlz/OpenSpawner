@@ -47,7 +47,7 @@ class Config:
     DOCKER_SOCKET = os.getenv('DOCKER_SOCKET', 'unix://var/run/docker.sock')
 
     # Legacy-Fallback für Backward-Kompatibilität (models.py)
-    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'user-template-01:latest')
+    USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'template-01:latest')
 
     # Wartezeit nach Container-Start (Sekunden)
     CONTAINER_STARTUP_WAIT = int(os.getenv('CONTAINER_STARTUP_WAIT', 2))
@@ -63,18 +63,15 @@ class Config:
 
     @staticmethod
     def _extract_type_from_image(image_name: str) -> str:
-        """Extrahiert den Container-Typ aus dem Image-Namen (z.B. 'user-template-01:latest' -> 'template-01')."""
-        base_name = image_name.split(':')[0]
-        if base_name.startswith('user-'):
-            base_name = base_name[5:]
-        return base_name
+        """Extrahiert den Container-Typ aus dem Image-Namen (z.B. 'template-01:latest' -> 'template-01')."""
+        return image_name.split(':')[0]
 
     @staticmethod
     def _load_template_images() -> list:
         """Lädt die Template-Image-Liste aus USER_TEMPLATE_IMAGES (Semikolon-getrennt)."""
         raw_images = os.getenv('USER_TEMPLATE_IMAGES', '')
         if not raw_images:
-            return ['user-template-01:latest']
+            return ['template-01:latest']
         return [img.strip() for img in raw_images.split(';') if img.strip()]
 
     @staticmethod

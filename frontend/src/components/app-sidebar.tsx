@@ -35,7 +35,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
                 <Package className="!size-6" />
-                <span className="truncate text-base font-bold">OpenSpawner</span>
+                <span className="truncate text-xl font-bold">OpenSpawner</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -3,9 +3,59 @@
 import { useAuth } from '@/hooks/use-auth'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+
+  if (isLoading || !user) {
+    return (
+      <>
+        <div className="mb-6">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid gap-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-16 mb-1" />
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Skeleton className="h-3 w-14 mb-1.5" />
+                <Skeleton className="h-5 w-52" />
+              </div>
+              <div>
+                <Skeleton className="h-3 w-24 mb-1.5" />
+                <Skeleton className="h-5 w-36" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-28 mb-1" />
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Skeleton className="h-3 w-20 mb-1.5" />
+                <Skeleton className="h-5 w-40" />
+              </div>
+              <div>
+                <Skeleton className="h-3 w-28 mb-1.5" />
+                <Skeleton className="h-5 w-40" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -24,11 +74,11 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <span className="text-sm font-medium text-muted-foreground">Email</span>
+              <span className="text-sm font-medium text-muted-foreground">E-Mail</span>
               <p className="text-base font-semibold">{user?.email}</p>
             </div>
             <div>
-              <span className="text-sm font-medium text-muted-foreground">Slug</span>
+              <span className="text-sm font-medium text-muted-foreground">Benutzername</span>
               <p className="text-base font-semibold">{user?.slug}</p>
             </div>
             <div className="flex items-center gap-2">

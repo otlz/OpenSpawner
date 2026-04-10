@@ -420,15 +420,15 @@ fi
 # Fallback: Wenn noch immer leer, baue alle Templates (rückwärtskompatibel)
 if [ -z "$USER_TEMPLATE_IMAGES" ]; then
     echo -e "${YELLOW}⚠️  USER_TEMPLATE_IMAGES nicht konfiguriert${NC}"
-    echo "  Fallback: Baue alle user-template-* Verzeichnisse (alte Logik)..."
+    echo "  Fallback: Baue alle template-* Verzeichnisse (alte Logik)..."
     echo ""
 
     BUILT_TEMPLATES=0
-    TEMPLATE_DIRS=$(find "${INSTALL_DIR}/templates" -maxdepth 1 -type d -name "user-template*" 2>/dev/null | wc -l)
+    TEMPLATE_DIRS=$(find "${INSTALL_DIR}/templates" -maxdepth 1 -type d -name "template-*" 2>/dev/null | wc -l)
     TOTAL_BUILDS=$((2 + TEMPLATE_DIRS))
     BUILD_STEP=$((BUILD_STEP + 1))
 
-    for template_dir in "${INSTALL_DIR}"/templates/user-template*; do
+    for template_dir in "${INSTALL_DIR}"/templates/template-*; do
         [ -d "$template_dir" ] || continue
         template_name=$(basename "$template_dir")
         image_name="${template_name}:latest"
@@ -501,7 +501,7 @@ else
         [ -z "$template_tag" ] && template_tag="latest"
 
         # Vollständiger Pfad zum Template-Verzeichnis
-        template_dir="${INSTALL_DIR}/${template_dir_name}"
+        template_dir="${INSTALL_DIR}/templates/${template_dir_name}"
 
         echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Template: ${template_dir_name}:${template_tag}"
 
@@ -574,7 +574,7 @@ else
     echo "  Prüfe auf ungekonfigurierte Template-Verzeichnisse..."
     UNUSED_COUNT=0
 
-    for template_dir in "${INSTALL_DIR}"/templates/user-template*; do
+    for template_dir in "${INSTALL_DIR}"/templates/template-*; do
         [ -d "$template_dir" ] || continue
         template_name=$(basename "$template_dir")
 
@@ -747,6 +747,6 @@ echo "  - SMTP konfigurieren: .env Datei anpassen"
 echo "  - Datenbank wird automatisch mit allen Tabellen erstellt"
 echo ""
 echo "Template Configuration (.env):"
-echo "  USER_TEMPLATE_IMAGE_DEV=user-service-template:latest"
-echo "  USER_TEMPLATE_IMAGE_PROD=user-template-next:latest"
+echo "  USER_TEMPLATE_IMAGE_DEV=template-01:latest"
+echo "  USER_TEMPLATE_IMAGE_PROD=template-next:latest"
 echo ""

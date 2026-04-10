@@ -2,7 +2,7 @@
   "templates": [
     {
       "type": "template-01",
-      "image": "user-template-01:latest",
+      "image": "template-01:latest",
       "display_name": "Nginx Basic",
       "description": "Simple Nginx server with static files and welcome page",
       "os": "Alpine Linux",
@@ -12,7 +12,7 @@
     },
     {
       "type": "template-02",
-      "image": "user-template-02:latest",
+      "image": "template-02:latest",
       "display_name": "Nginx Advanced",
       "description": "Nginx with advanced features and configurations",
       "os": "Alpine Linux",
@@ -22,7 +22,7 @@
     },
     {
       "type": "template-next",
-      "image": "user-template-next:latest",
+      "image": "template-next:latest",
       "display_name": "Next.js Production",
       "description": "React application with Shadcn/UI, TypeScript and modern build setup",
       "os": "Debian",
@@ -32,7 +32,7 @@
     },
     {
       "type": "dictionary",
-      "image": "user-template-dictionary:latest",
+      "image": "template-dictionary:latest",
       "display_name": "Dictionary",
       "description": "Personal dictionary with database - save words and definitions",
       "os": "Alpine Linux",
@@ -42,7 +42,7 @@
     },
     {
       "type": "vcoder",
-      "image": "user-template-vcoder:latest",
+      "image": "template-vcoder:latest",
       "display_name": "ESP8266 IDE",
       "description": "Web IDE with PlatformIO for ESP8266/Wemos development",
       "os": "Debian",
