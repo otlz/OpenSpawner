@@ -550,7 +550,12 @@ def api_user_containers():
             'last_used': user_container.last_used.isoformat() if user_container and user_container.last_used else None,
             # Phase 7: Container Blocking
             'is_blocked': user_container.is_blocked if user_container else False,
-            'blocked_at': user_container.blocked_at.isoformat() if user_container and user_container.blocked_at else None
+            'blocked_at': user_container.blocked_at.isoformat() if user_container and user_container.blocked_at else None,
+            # Template metadata
+            'os': template.get('os', 'Linux'),
+            'software': template.get('software', ''),
+            'icon': template.get('icon', ''),
+            'port': template.get('port', 8080)
         })
 
     return jsonify({'containers': containers}), 200
@@ -651,3 +656,154 @@ def api_container_launch(container_type):
         'container_id': user_container.container_id,
         'status': 'running'
     }), 200
+
+
+@api_bp.route('/container/stop/<container_type>', methods=['POST'])
+@jwt_required()
+def api_container_stop(container_type):
+    """Stoppt einen laufenden Container des Benutzers."""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if container_type not in current_app.config['CONTAINER_TEMPLATES']:
+        return jsonify({'error': f'Invalid container type: {container_type}'}), 400
+
+    user_container = UserContainer.query.filter_by(
+        user_id=user.id,
+        container_type=container_type
+    ).first()
+
+    if not user_container or not user_container.container_id:
+        return jsonify({'error': 'Kein Container vorhanden'}), 404
+
+    if user_container.is_blocked:
+        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+
+    try:
+        container_mgr = ContainerManager()
+        container_mgr.stop_container(user_container.container_id)
+        current_app.logger.info(f"[SPAWNER] Container {user_container.container_id[:12]} stopped by user {user.email}")
+        return jsonify({'message': 'Container gestoppt', 'status': 'stopped'}), 200
+    except Exception as e:
+        current_app.logger.error(f"Container stop failed: {str(e)}")
+        return jsonify({'error': f'Container konnte nicht gestoppt werden: {str(e)}'}), 500
+
+
+@api_bp.route('/container/<container_type>', methods=['DELETE'])
+@jwt_required()
+def api_container_delete(container_type):
+    """Löscht einen Container des Benutzers (stoppt, entfernt Docker-Container und DB-Eintrag)."""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if container_type not in current_app.config['CONTAINER_TEMPLATES']:
+        return jsonify({'error': f'Invalid container type: {container_type}'}), 400
+
+    user_container = UserContainer.query.filter_by(
+        user_id=user.id,
+        container_type=container_type
+    ).first()
+
+    if not user_container:
+        return jsonify({'error': 'Kein Container vorhanden'}), 404
+
+    if user_container.is_blocked:
+        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+
+    try:
+        container_mgr = ContainerManager()
+        if user_container.container_id:
+            try:
+                container_mgr.stop_container(user_container.container_id)
+            except Exception:
+                pass
+            try:
+                container_mgr.remove_container(user_container.container_id)
+            except Exception:
+                pass
+
+        db.session.delete(user_container)
+        db.session.commit()
+        current_app.logger.info(f"[SPAWNER] Container {container_type} deleted by user {user.email}")
+        return jsonify({'message': 'Container gelöscht'}), 200
+    except Exception as e:
+        current_app.logger.error(f"Container delete failed: {str(e)}")
+        return jsonify({'error': f'Container konnte nicht gelöscht werden: {str(e)}'}), 500
+
+
+@api_bp.route('/container/restart/<container_type>', methods=['POST'])
+@jwt_required()
+def api_container_restart_type(container_type):
+    """Startet einen Container des Benutzers neu (stop + remove + spawn)."""
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if container_type not in current_app.config['CONTAINER_TEMPLATES']:
+        return jsonify({'error': f'Invalid container type: {container_type}'}), 400
+
+    user_container = UserContainer.query.filter_by(
+        user_id=user.id,
+        container_type=container_type
+    ).first()
+
+    if user_container and user_container.is_blocked:
+        return jsonify({'error': 'Dieser Container wurde von einem Administrator gesperrt'}), 403
+
+    container_mgr = ContainerManager()
+
+    # Remove old container if exists
+    if user_container and user_container.container_id:
+        try:
+            container_mgr.stop_container(user_container.container_id)
+        except Exception:
+            pass
+        try:
+            container_mgr.remove_container(user_container.container_id)
+        except Exception:
+            pass
+
+    # Spawn new container
+    try:
+        container_id, container_port = container_mgr.spawn_multi_container(
+            user_id=user.id,
+            slug=user.slug,
+            container_type=container_type
+        )
+
+        if user_container:
+            user_container.container_id = container_id
+            user_container.container_port = container_port
+            user_container.last_used = datetime.utcnow()
+        else:
+            user_container = UserContainer(
+                user_id=user.id,
+                container_type=container_type,
+                container_id=container_id,
+                container_port=container_port
+            )
+            db.session.add(user_container)
+
+        db.session.commit()
+        current_app.logger.info(f"[SPAWNER] Container {container_type} restarted for user {user.email}")
+
+        slug_with_suffix = f"{user.slug}-{container_type}"
+        service_url = _get_service_url(slug_with_suffix, container_port)
+
+        return jsonify({
+            'message': 'Container neugestartet',
+            'container_id': container_id,
+            'service_url': service_url,
+            'status': 'running'
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Container restart failed: {str(e)}")
+        return jsonify({'error': f'Container konnte nicht neugestartet werden: {str(e)}'}), 500

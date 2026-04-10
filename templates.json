@@ -4,31 +4,51 @@
       "type": "template-01",
       "image": "user-template-01:latest",
       "display_name": "Nginx Basic",
-      "description": "Simple Nginx server with static files and welcome page"
+      "description": "Simple Nginx server with static files and welcome page",
+      "os": "Alpine Linux",
+      "software": "Nginx 1.25",
+      "icon": "SiNginx",
+      "port": 8080
     },
     {
       "type": "template-02",
       "image": "user-template-02:latest",
       "display_name": "Nginx Advanced",
-      "description": "Nginx with advanced features and configurations"
+      "description": "Nginx with advanced features and configurations",
+      "os": "Alpine Linux",
+      "software": "Nginx 1.25",
+      "icon": "SiNginx",
+      "port": 8080
     },
     {
       "type": "template-next",
       "image": "user-template-next:latest",
       "display_name": "Next.js Production",
-      "description": "React application with Shadcn/UI, TypeScript and modern build setup"
+      "description": "React application with Shadcn/UI, TypeScript and modern build setup",
+      "os": "Debian",
+      "software": "Node.js 20",
+      "icon": "SiNextdotjs",
+      "port": 8080
     },
     {
       "type": "dictionary",
       "image": "user-template-dictionary:latest",
       "display_name": "Dictionary",
-      "description": "Personal dictionary with database - save words and definitions"
+      "description": "Personal dictionary with database - save words and definitions",
+      "os": "Alpine Linux",
+      "software": "SQLite + Python",
+      "icon": "SiSqlite",
+      "port": 8080
     },
     {
       "type": "vcoder",
       "image": "user-template-vcoder:latest",
       "display_name": "ESP8266 IDE",
-      "description": "Web IDE with PlatformIO for ESP8266/Wemos development"
+      "description": "Web IDE with PlatformIO for ESP8266/Wemos development",
+      "os": "Debian",
+      "software": "PlatformIO",
+      "icon": "SiVisualstudiocode",
+      "port": 8080
     }
   ]
 }

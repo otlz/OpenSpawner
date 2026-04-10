@@ -14,62 +14,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ExternalLink,
   Loader2,
   Play,
   CheckCircle,
   AlertCircle,
-  Container as ContainerIcon,
   ShieldAlert,
+  RefreshCw,
+  Square,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-
-/** Zeigt den passenden Aktions-Button für einen Container an (gesperrt/öffnen/starten). */
-function ContainerActionButton({
-  container,
-  isBlocked,
-  launching,
-  onLaunch,
-}: {
-  container: Container;
-  isBlocked: boolean;
-  launching: string | null;
-  onLaunch: (type: string) => void;
-}) {
-  if (isBlocked) {
-    return (
-      <Button className="flex-1" variant="destructive" disabled>
-        <ShieldAlert className="mr-2 h-4 w-4" />
-        Gesperrt
-      </Button>
-    );
-  }
-
-  if (container.status === "running") {
-    return (
-      <Button className="flex-1" onClick={() => window.open(container.service_url, "_blank")}>
-        <ExternalLink className="mr-2 h-4 w-4" />
-        Service öffnen
-      </Button>
-    );
-  }
-
-  return (
-    <Button className="flex-1" onClick={() => onLaunch(container.type)} disabled={launching === container.type}>
-      {launching === container.type ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Wird gestartet...
-        </>
-      ) : (
-        <>
-          <Play className="mr-2 h-4 w-4" />
-          {container.status === "not_created" ? "Erstellen & Öffnen" : "Starten & Öffnen"}
-        </>
-      )}
-    </Button>
-  );
-}
+import { getContainerIcon } from "@/lib/container-icons";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -77,6 +43,10 @@ export default function DashboardPage() {
   const [containers, setContainers] = useState<Container[]>([]);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -106,20 +76,18 @@ export default function DashboardPage() {
     }
   };
 
+  const isActionInProgress = (type: string) =>
+    launching === type || stopping === type || restarting === type || deleting === type;
+
   const handleLaunchContainer = async (containerType: string) => {
     setLaunching(containerType);
     setError("");
     try {
-      const { data, error: apiError } = await api.launchContainer(
-        containerType
-      );
+      const { data, error: apiError } = await api.launchContainer(containerType);
       if (data) {
-        // Container erfolgreich gestartet - öffne in neuem Tab
         window.open(data.service_url, "_blank");
-        // Reload Container-Liste
         await loadContainers();
       } else if (apiError) {
-        // Prüfe auf Blocking-Fehler
         if (apiError.includes("Administrator")) {
           toast.error("Dieser Container wurde von einem Administrator gesperrt", {
             description: "Kontaktiere einen Administrator für mehr Informationen",
@@ -135,31 +103,95 @@ export default function DashboardPage() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "running":
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case "stopped":
-        return <AlertCircle className="h-5 w-5 text-yellow-500" />;
-      case "error":
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
-      default:
-        return null;
+  const handleStopContainer = async (containerType: string) => {
+    setStopping(containerType);
+    try {
+      const { data, error: apiError } = await api.stopContainer(containerType);
+      if (data) {
+        toast.success("Container gestoppt");
+        await loadContainers();
+      } else if (apiError) {
+        toast.error(apiError);
+      }
+    } catch (err) {
+      toast.error("Fehler beim Stoppen des Containers");
+    } finally {
+      setStopping(null);
     }
   };
 
-  const getStatusText = (status: string) => {
+  const handleRestartContainer = async (containerType: string) => {
+    setRestarting(containerType);
+    try {
+      const { data, error: apiError } = await api.restartContainerByType(containerType);
+      if (data) {
+        toast.success("Container neugestartet");
+        await loadContainers();
+      } else if (apiError) {
+        toast.error(apiError);
+      }
+    } catch (err) {
+      toast.error("Fehler beim Neustarten des Containers");
+    } finally {
+      setRestarting(null);
+    }
+  };
+
+  const handleDeleteContainer = async (containerType: string) => {
+    setDeleting(containerType);
+    try {
+      const { data, error: apiError } = await api.deleteContainer(containerType);
+      if (data) {
+        toast.success("Container gelöscht");
+        await loadContainers();
+      } else if (apiError) {
+        toast.error(apiError);
+      }
+    } catch (err) {
+      toast.error("Fehler beim Löschen des Containers");
+    } finally {
+      setDeleting(null);
+      setDeleteTarget(null);
+    }
+  };
+
+  const getStatusBadge = (status: string, isBlocked: boolean) => {
+    if (isBlocked) {
+      return (
+        <Badge variant="destructive" className="text-xs">
+          <ShieldAlert className="mr-1 h-3 w-3" />
+          Gesperrt
+        </Badge>
+      );
+    }
     switch (status) {
       case "running":
-        return "Läuft";
+        return (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">
+            <CheckCircle className="mr-1 h-3 w-3" />
+            Läuft
+          </Badge>
+        );
       case "stopped":
-        return "Gestoppt";
+        return (
+          <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100 text-xs">
+            <AlertCircle className="mr-1 h-3 w-3" />
+            Gestoppt
+          </Badge>
+        );
       case "error":
-        return "Fehler";
-      case "not_created":
-        return "Noch nicht erstellt";
+        return (
+          <Badge variant="destructive" className="text-xs">
+            <AlertCircle className="mr-1 h-3 w-3" />
+            Fehler
+          </Badge>
+        );
       default:
-        return status;
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Nicht erstellt
+          </Badge>
+        );
     }
   };
 
@@ -191,90 +223,230 @@ export default function DashboardPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {containers.map((container) => {
-            const isBlocked = container.is_blocked === true;  // Phase 7
+            const isBlocked = container.is_blocked === true;
+            const busy = isActionInProgress(container.type);
 
             return (
-            <Card
-              key={container.type}
-              className={`relative transition-all ${
-                isBlocked ? "border-red-500 bg-red-50" : ""
-              }`}
-            >
-              {/* Blocked Badge */}
-              {isBlocked && (
-                <div className="absolute top-3 right-3">
-                  <Badge variant="destructive" className="text-xs">
-                    <ShieldAlert className="mr-1 h-3 w-3" />
-                    Gesperrt
-                  </Badge>
-                </div>
-              )}
-
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <ContainerIcon className="h-5 w-5" />
-                      {container.display_name}
-                    </CardTitle>
-                    <CardDescription>
-                      {isBlocked ? (
-                        <span className="text-destructive font-semibold">
-                          Dieser Container wurde von einem Administrator gesperrt
-                        </span>
-                      ) : (
-                        container.description
-                      )}
-                    </CardDescription>
+              <Card
+                key={container.type}
+                className={`relative transition-all ${
+                  isBlocked ? "border-red-500 bg-red-50" : ""
+                }`}
+              >
+                <CardHeader className="p-4 pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="shrink-0 text-muted-foreground">
+                        {getContainerIcon(container.icon, "h-5 w-5")}
+                      </div>
+                      <CardTitle className="text-base font-semibold truncate">
+                        {container.display_name}
+                      </CardTitle>
+                    </div>
+                    {getStatusBadge(container.status, isBlocked)}
                   </div>
-                  {!isBlocked && getStatusIcon(container.status)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="text-sm">
-                    <p className="text-muted-foreground">Status:</p>
-                    <p className="font-medium">
-                      {isBlocked ? "Gesperrt von Admin" : getStatusText(container.status)}
-                    </p>
-                  </div>
+                  <CardDescription className="text-xs mt-1">
+                    {isBlocked ? (
+                      <span className="text-destructive font-semibold">
+                        Dieser Container wurde von einem Administrator gesperrt
+                      </span>
+                    ) : (
+                      container.description
+                    )}
+                  </CardDescription>
+                </CardHeader>
 
-                  {container.last_used && (
-                    <div className="text-sm">
-                      <p className="text-muted-foreground">Zuletzt verwendet:</p>
-                      <p className="font-medium">
+                <CardContent className="p-4 pt-2">
+                  <div className="space-y-3">
+                    {/* Metadata */}
+                    {(container.os || container.software) && (
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        {container.os && (
+                          <div>
+                            <span className="font-medium text-foreground">OS:</span>{" "}
+                            {container.os}
+                          </div>
+                        )}
+                        {container.software && (
+                          <div>
+                            <span className="font-medium text-foreground">Software:</span>{" "}
+                            {container.software}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Last used */}
+                    {container.last_used && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">Zuletzt verwendet:</span>{" "}
                         {new Date(container.last_used).toLocaleString("de-DE")}
-                      </p>
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {isBlocked && container.blocked_at && (
-                    <div className="text-sm text-destructive">
-                      <p className="text-muted-foreground">Gesperrt am:</p>
-                      <p className="font-medium">
+                    {/* Blocked date */}
+                    {isBlocked && container.blocked_at && (
+                      <div className="text-xs text-destructive">
+                        <span className="font-medium">Gesperrt am:</span>{" "}
                         {new Date(container.blocked_at).toLocaleString("de-DE")}
-                      </p>
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {/* Aktions-Button je nach Status */}
-                  <div className="flex gap-2">
-                    <ContainerActionButton
-                      container={container}
-                      isBlocked={isBlocked}
-                      launching={launching}
-                      onLaunch={handleLaunchContainer}
-                    />
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {isBlocked ? (
+                        <Button size="sm" variant="destructive" disabled>
+                          <ShieldAlert className="mr-1.5 h-3.5 w-3.5" />
+                          Gesperrt
+                        </Button>
+                      ) : container.status === "not_created" ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handleLaunchContainer(container.type)}
+                          disabled={busy}
+                        >
+                          {launching === container.type ? (
+                            <>
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              Wird erstellt...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-1.5 h-3.5 w-3.5" />
+                              Erstellen
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <>
+                          {container.status === "running" && (
+                            <Button
+                              size="sm"
+                              onClick={() => window.open(container.service_url, "_blank")}
+                              disabled={busy}
+                            >
+                              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                              Öffnen
+                            </Button>
+                          )}
+
+                          {container.status !== "running" && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleLaunchContainer(container.type)}
+                              disabled={busy}
+                            >
+                              {launching === container.type ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Play className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Starten
+                            </Button>
+                          )}
+
+                          {container.status === "running" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRestartContainer(container.type)}
+                              disabled={busy}
+                            >
+                              {restarting === container.type ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Neustarten
+                            </Button>
+                          )}
+
+                          {container.status === "running" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStopContainer(container.type)}
+                              disabled={busy}
+                            >
+                              {stopping === container.type ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Square className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Stoppen
+                            </Button>
+                          )}
+
+                          {container.status === "error" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRestartContainer(container.type)}
+                              disabled={busy}
+                            >
+                              {restarting === container.type ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Neustarten
+                            </Button>
+                          )}
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget(container.type)}
+                            disabled={busy}
+                          >
+                            {deleting === container.type ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Löschen
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Container wirklich löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Der Container und alle enthaltenen Daten werden unwiderruflich gelöscht.
+              Du kannst den Container jederzeit neu erstellen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting !== null}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && handleDeleteContainer(deleteTarget)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting !== null}
+            >
+              {deleting ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Endgültig löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

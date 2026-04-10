@@ -116,6 +116,10 @@ export interface Container {
   last_used: string | null;
   is_blocked?: boolean;  // Phase 7: Container Blocking
   blocked_at?: string | null;  // Phase 7
+  os?: string;
+  software?: string;
+  icon?: string;
+  port?: number;
 }
 
 export interface UserContainer {
@@ -139,6 +143,22 @@ export interface LaunchResponse {
   message: string;
   service_url: string;
   container_id: string;
+  status: string;
+}
+
+export interface StopResponse {
+  message: string;
+  status: string;
+}
+
+export interface DeleteResponse {
+  message: string;
+}
+
+export interface RestartByTypeResponse {
+  message: string;
+  container_id: string;
+  service_url: string;
   status: string;
 }
 
@@ -277,6 +297,21 @@ export const api = {
 
   launchContainer: (containerType: string) =>
     fetchApi<LaunchResponse>(`/api/container/launch/${containerType}`, {
+      method: "POST",
+    }),
+
+  stopContainer: (containerType: string) =>
+    fetchApi<StopResponse>(`/api/container/stop/${containerType}`, {
+      method: "POST",
+    }),
+
+  deleteContainer: (containerType: string) =>
+    fetchApi<DeleteResponse>(`/api/container/${containerType}`, {
+      method: "DELETE",
+    }),
+
+  restartContainerByType: (containerType: string) =>
+    fetchApi<RestartByTypeResponse>(`/api/container/restart/${containerType}`, {
       method: "POST",
     }),
 };

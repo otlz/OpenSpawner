@@ -102,10 +102,13 @@ class ContainerManager:
             return False
 
     def get_container_status(self, container_id):
-        """Gibt den Status eines Containers zurück (running, exited, not_found, etc.)."""
+        """Gibt den Status eines Containers zurück (running, stopped, not_found, etc.)."""
         try:
             container = self._get_client().containers.get(container_id)
-            return container.status
+            status = container.status
+            if status == 'exited':
+                return 'stopped'
+            return status
         except docker.errors.NotFound:
             return 'not_found'
 

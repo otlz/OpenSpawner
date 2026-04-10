@@ -108,7 +108,11 @@ class Config:
             templates[container_type] = {
                 'image': image,
                 'display_name': config_meta.get('display_name', container_type.replace('-', ' ').title()),
-                'description': config_meta.get('description', f'Container based on {image}')
+                'description': config_meta.get('description', f'Container based on {image}'),
+                'os': config_meta.get('os', 'Linux'),
+                'software': config_meta.get('software', ''),
+                'icon': config_meta.get('icon', ''),
+                'port': config_meta.get('port', 8080)
             }
         cls.CONTAINER_TEMPLATES = templates
 
