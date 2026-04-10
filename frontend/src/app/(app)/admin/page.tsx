@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
   Container,
@@ -49,6 +49,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import StatsCards from "./components/stats-cards";
 import ContainerTab from "./components/container-tab";
 import DeleteDialog from "./components/delete-dialog";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 import EmailRulesTab from "./components/email-rules-tab";
 import {
   getStatusColor,
@@ -604,6 +606,9 @@ export default function AdminPage() {
                           )}
 
                           <Avatar>
+                            {u.avatar_url && (
+                              <AvatarImage src={`${API_BASE}${u.avatar_url}`} alt={u.email} />
+                            )}
                             <AvatarFallback className={u.is_blocked ? "bg-red-200 text-red-800" : u.role === 'admin' ? "bg-primary text-primary-foreground" : u.role === 'manager' ? "bg-blue-200 text-blue-800" : ""}>
                               {u.email.slice(0, 1).toUpperCase()}
                             </AvatarFallback>

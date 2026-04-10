@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { LogOut, ChevronsUpDown, Settings, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/hooks/use-auth'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/sidebar'
 import Link from 'next/link'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+
 export function NavUser() {
   const { user, logout } = useAuth()
   const { isMobile } = useSidebar()
@@ -36,6 +38,8 @@ export function NavUser() {
     router.push('/login')
   }
 
+  const avatarSrc = user?.avatar_url ? `${API_BASE}${user.avatar_url}` : undefined
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -46,6 +50,9 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
+                {avatarSrc && (
+                  <AvatarImage src={avatarSrc} alt="Profilbild" />
+                )}
                 <AvatarFallback className="rounded-lg">
                   {user?.email?.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
@@ -68,6 +75,9 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
+                  {avatarSrc && (
+                    <AvatarImage src={avatarSrc} alt="Profilbild" />
+                  )}
                   <AvatarFallback className="rounded-lg">
                     {user?.email?.charAt(0).toUpperCase() || 'U'}
                   </AvatarFallback>

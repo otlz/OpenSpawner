@@ -61,6 +61,7 @@ export interface User {
   last_used?: string | null;
   created_at?: string | null;
   container_id?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface LoginResponse {
@@ -160,6 +161,15 @@ export interface RestartByTypeResponse {
   container_id: string;
   service_url: string;
   status: string;
+}
+
+export interface AvatarUploadResponse {
+  message: string;
+  avatar_url: string;
+}
+
+export interface AvatarDeleteResponse {
+  message: string;
 }
 
 export interface HeartbeatResponse {
@@ -286,6 +296,35 @@ export const api = {
 
   // User
   getUser: () => fetchApi<UserResponse>("/api/user/me"),
+
+  // Avatar
+  uploadAvatar: async (file: File): Promise<ApiResponse<AvatarUploadResponse>> => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/user/avatar`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { error: data.error || "Ein Fehler ist aufgetreten" };
+      }
+
+      return { data };
+    } catch (error) {
+      return { error: "Netzwerkfehler — Server nicht erreichbar" };
+    }
+  },
+
+  deleteAvatar: () =>
+    fetchApi<AvatarDeleteResponse>("/api/user/avatar", {
+      method: "DELETE",
+    }),
 
   // Container
   getContainerStatus: () =>

@@ -9,6 +9,16 @@ Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutz
 - Container sind automatisch per Web erreichbar
 - Admins verwalten Benutzer und Container über ein Dashboard
 
+## Screenshots
+
+**Dashboard** — Benutzer starten und verwalten ihre Container aus vorgefertigten Templates.
+
+![Dashboard](docs/images/dashboard.png)
+
+**Administration** — Admins verwalten Benutzer, Container und Registrierungen.
+
+![Admin](docs/images/admin.png)
+
 ## Schnellstart (Docker Desktop)
 
 Funktioniert auf **Windows** und **Linux** gleich — Docker Desktop muss installiert sein.
@@ -74,22 +84,36 @@ Alle Optionen sind in [.env.example](.env.example) dokumentiert.
 
 ## Templates
 
-OpenSpawner kommt mit fertigen Container-Templates:
+OpenSpawner kommt mit fertigen Container-Templates, organisiert in Kategorien:
+
+**Anwendungen**
 
 | Template | Beschreibung |
 |----------|-------------|
-| `template-nginx` | Nginx — einfache statische Seite |
-| `template-nextjs` | Next.js React-Anwendung |
-| `template-dictionary` | Python Flask Dictionary App |
-| `template-vcoder` | Web IDE mit PlatformIO für ESP8266 |
-| `template-vscode` | Saubere VS Code Instanz |
-| `template-office` | LibreOffice im Browser |
+| `template-nginx` | Statischer Webserver mit Willkommensseite |
+| `template-nextjs` | React App mit Shadcn/UI und TypeScript |
+| `template-dictionary` | Wörter und Definitionen lokal speichern |
+| `template-vcoder` | PlatformIO IDE für ESP8266 und Wemos |
+| `template-vscode` | Code Server mit eigener Erweiterungsverwaltung |
+| `template-office` | Writer, Calc und Impress im Browser |
+
+**Betriebssysteme**
+
+| Template | Beschreibung |
+|----------|-------------|
+| `template-linuxmint` | Ubuntu XFCE-Desktop im Browser |
+
+**Datenbanken**
+
+| Template | Beschreibung |
+|----------|-------------|
+| `template-mariadb` | MariaDB Datenbank mit phpMyAdmin Web-Interface |
 
 ### Eigenes Template erstellen
 
-1. Verzeichnis `templates/template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
+1. Verzeichnis `templates/<kategorie>/template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
 2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufügen
-3. Metadaten in `templates.json` eintragen
+3. Metadaten in `templates.json` eintragen (inkl. Kategorie)
 4. Bauen: `docker compose --profile build build`
 
 ## Produktion (mit Traefik)

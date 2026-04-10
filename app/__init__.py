@@ -24,38 +24,41 @@ def create_app():
     app.config.from_object(Config)
 
     # Validate security config in production (non-localhost)
-    if Config.BASE_DOMAIN != 'localhost':
-        if Config.SECRET_KEY == 'dev-secret-key-change-in-production':
+    if Config.BASE_DOMAIN != "localhost":
+        if Config.SECRET_KEY == "dev-secret-key-change-in-production":
             raise RuntimeError(
                 "CRITICAL: SECRET_KEY must be changed in production. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
 
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'Please log in to access this page.'
-    login_manager.login_message_category = 'error'
+    login_manager.login_view = "auth.login"
+    login_manager.login_message = "Please log in to access this page."
+    login_manager.login_message_category = "error"
     jwt.init_app(app)
 
     # Initialize CORS
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": app.config.get('CORS_ORIGINS', ['http://localhost:3000']),
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True
-        }
-    })
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": app.config.get("CORS_ORIGINS", ["http://localhost:3000"]),
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True,
+            }
+        },
+    )
 
     # Initialize Swagger/OpenAPI
     swagger_config = {
         "headers": [],
         "specs": [
             {
-                "endpoint": 'openapi',
-                "route": '/openapi.json',
+                "endpoint": "openapi",
+                "route": "/openapi.json",
                 "rule_filter": lambda rule: True,
                 "model_filter": lambda tag: True,
             }
@@ -67,9 +70,7 @@ def create_app():
         "description": "REST API for OpenSpawner with admin debug endpoints",
         "version": "2.0.0",
         "termsOfService": "",
-        "contact": {
-            "name": "API Support"
-        }
+        "contact": {"name": "API Support"},
     }
     Swagger(app, config=swagger_config)
 
@@ -80,18 +81,18 @@ def create_app():
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
-        return jsonify({'error': 'Token expired'}), 401
+        return jsonify({"error": "Token expired"}), 401
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
-        return jsonify({'error': 'Invalid token'}), 401
+        return jsonify({"error": "Invalid token"}), 401
 
     @jwt.unauthorized_loader
     def missing_token_callback(error):
-        return jsonify({'error': 'Authentication required'}), 401
+        return jsonify({"error": "Authentication required"}), 401
 
     # Configure logging
-    log_file = app.config.get('LOG_FILE', '/app/logs/spawner.log')
+    log_file = app.config.get("LOG_FILE", "/app/logs/spawner.log")
     log_dir = os.path.dirname(log_file)
 
     if log_dir and not os.path.exists(log_dir):
@@ -101,10 +102,12 @@ def create_app():
         file_handler = RotatingFileHandler(
             log_file,
             maxBytes=10485760,  # 10MB
-            backupCount=5
+            backupCount=5,
         )
         file_handler.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         file_handler.setFormatter(formatter)
         app.logger.addHandler(file_handler)
         app.logger.setLevel(logging.INFO)
@@ -120,33 +123,33 @@ def create_app():
         return User.query.get(int(user_id))
 
     # Health check route
-    @app.route('/health')
+    @app.route("/health")
     def health():
         """Health-Check für Docker und Monitoring."""
-        db_status = 'ok'
-        docker_status = 'warning'
+        db_status = "ok"
+        docker_status = "warning"
 
         try:
-            db.session.execute(text('SELECT 1'))
+            db.session.execute(text("SELECT 1"))
         except Exception as e:
-            db_status = f'error: {str(e)}'
+            db_status = f"error: {str(e)}"
             app.logger.error(f"Database health check failed: {str(e)}")
 
         try:
             container_mgr = ContainerManager()
             container_mgr._get_client().ping()
-            docker_status = 'ok'
+            docker_status = "ok"
         except Exception as e:
-            docker_status = f'warning: {str(e)}'
+            docker_status = f"warning: {str(e)}"
             app.logger.warning(f"Docker health check failed (non-critical): {str(e)}")
 
-        status_code = 200 if db_status == 'ok' else 503
+        status_code = 200 if db_status == "ok" else 503
 
         response = {
-            'status': 'healthy' if status_code == 200 else 'unhealthy',
-            'database': db_status,
-            'docker': docker_status,
-            'version': '1.0.0'
+            "status": "healthy" if status_code == 200 else "unhealthy",
+            "database": db_status,
+            "docker": docker_status,
+            "version": "1.0.0",
         }
 
         if status_code != 200:
@@ -161,33 +164,34 @@ def create_app():
         db.create_all()
         _migrate_is_admin_to_role(app)
         _migrate_add_container_status(app)
-        app.logger.info('Database tables created')
+        _migrate_add_avatar(app)
+        app.logger.info("Database tables created")
 
     # Initialize container reaper (idle timeout / stale cleanup)
     # Guard against double-start in Flask debug reloader
-    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         from app.services.container_reaper import ContainerReaper
 
         reaper = ContainerReaper(app)
-        app.config['SCHEDULER_API_ENABLED'] = False
+        app.config["SCHEDULER_API_ENABLED"] = False
 
         scheduler.init_app(app)
         scheduler.add_job(
-            id='reap_idle',
+            id="reap_idle",
             func=reaper.reap_idle_containers,
-            trigger='interval',
-            seconds=Config.REAPER_INTERVAL
+            trigger="interval",
+            seconds=Config.REAPER_INTERVAL,
         )
         scheduler.add_job(
-            id='reap_stale',
+            id="reap_stale",
             func=reaper.reap_stale_containers,
-            trigger='interval',
-            seconds=3600
+            trigger="interval",
+            seconds=3600,
         )
         scheduler.start()
         app.logger.info(
-            f'[REAPER] Started (idle={Config.CONTAINER_IDLE_TIMEOUT}s, '
-            f'stale={Config.CONTAINER_STALE_TIMEOUT}s, interval={Config.REAPER_INTERVAL}s)'
+            f"[REAPER] Started (idle={Config.CONTAINER_IDLE_TIMEOUT}s, "
+            f"stale={Config.CONTAINER_STALE_TIMEOUT}s, interval={Config.REAPER_INTERVAL}s)"
         )
 
     return app
@@ -196,36 +200,66 @@ def create_app():
 def _migrate_add_container_status(app):
     """Migration: Add status column to user_container if missing."""
     inspector = sa_inspect(db.engine)
-    columns = [c['name'] for c in inspector.get_columns('user_container')]
+    columns = [c["name"] for c in inspector.get_columns("user_container")]
 
-    if 'status' in columns:
+    if "status" in columns:
         return  # Already migrated
 
     with db.engine.connect() as conn:
-        conn.execute(text("ALTER TABLE user_container ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'not_created'"))
+        conn.execute(
+            text(
+                "ALTER TABLE user_container ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'not_created'"
+            )
+        )
         # Set existing containers with a container_id to 'running' — the reaper will
         # check actual Docker status and correct to 'stopped' on its next tick
-        conn.execute(text("UPDATE user_container SET status = 'running' WHERE container_id IS NOT NULL"))
+        conn.execute(
+            text(
+                "UPDATE user_container SET status = 'running' WHERE container_id IS NOT NULL"
+            )
+        )
         conn.commit()
-    app.logger.info('[MIGRATION] Added status column to user_container')
+    app.logger.info("[MIGRATION] Added status column to user_container")
 
 
 def _migrate_is_admin_to_role(app):
     """Einmalige Migration: is_admin (Boolean) → role (String)."""
     inspector = sa_inspect(db.engine)
-    columns = [c['name'] for c in inspector.get_columns('user')]
+    columns = [c["name"] for c in inspector.get_columns("user")]
 
-    if 'role' in columns:
+    if "role" in columns:
         return  # Already migrated
 
-    if 'is_admin' in columns:
+    if "is_admin" in columns:
         with db.engine.connect() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+            conn.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"
+                )
+            )
             conn.execute(text("UPDATE user SET role = 'admin' WHERE is_admin = 1"))
             conn.commit()
-        app.logger.info('[MIGRATION] Migrated is_admin → role')
+        app.logger.info("[MIGRATION] Migrated is_admin → role")
     else:
         with db.engine.connect() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+            conn.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"
+                )
+            )
             conn.commit()
-        app.logger.info('[MIGRATION] Added role column')
+        app.logger.info("[MIGRATION] Added role column")
+
+
+def _migrate_add_avatar(app):
+    """Migration: Add avatar column to user table if missing."""
+    inspector = sa_inspect(db.engine)
+    columns = [c["name"] for c in inspector.get_columns("user")]
+
+    if "avatar" in columns:
+        return  # Already migrated
+
+    with db.engine.connect() as conn:
+        conn.execute(text("ALTER TABLE user ADD COLUMN avatar VARCHAR(255)"))
+        conn.commit()
+    app.logger.info("[MIGRATION] Added avatar column to user")
