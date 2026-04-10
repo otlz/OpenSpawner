@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Mail, AlertCircle, Package } from "lucide-react";
+import { Loader2, Mail, AlertCircle, PackageOpen } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -171,7 +171,7 @@ export default function LoginPage() {
                         )}
                       </Button>
                       <p className="text-center text-sm text-muted-foreground">
-                        Kein Passwort nötig — wir senden dir einen Anmelde-Link.
+                        Kein Passwort nötig, wir senden dir einen Anmelde-Link.
                       </p>
                     </div>
                   </form>
@@ -179,7 +179,7 @@ export default function LoginPage() {
               </div>
               <div className="relative hidden bg-primary md:flex md:flex-col md:items-center md:justify-center">
                 <div className="flex flex-col items-center gap-4 p-8 text-primary-foreground">
-                  <Package className="h-16 w-16" />
+                  <PackageOpen className="h-16 w-16" />
                   <div className="text-center">
                     <h2 className="text-2xl font-bold">OpenSpawner</h2>
                     <p className="mt-2 text-sm text-primary-foreground/80">

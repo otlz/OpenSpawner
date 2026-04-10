@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useHeartbeat } from "@/hooks/use-heartbeat";
-import { api, type Container } from "@/lib/api";
+import { api, type Container, type Category } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, isLoading: authLoading } = useAuth();
   const [containers, setContainers] = useState<Container[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState<string | null>(null);
   const [stopping, setStopping] = useState<string | null>(null);
@@ -75,6 +76,7 @@ export default function DashboardPage() {
       const { data, error: apiError } = await api.getUserContainers();
       if (data) {
         setContainers(data.containers);
+        setCategories(data.categories || []);
       } else if (apiError) {
         setError(apiError);
       }
@@ -243,15 +245,42 @@ export default function DashboardPage() {
     );
   }
 
+  const skeletonGrid = (
+    <div className="mb-8">
+      <Skeleton className="h-6 w-36 mb-4" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="p-4 pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-5 shrink-0 rounded" />
+                  <Skeleton className="h-5 w-28" />
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-full mt-2" />
+            </CardHeader>
+            <CardContent className="p-4 pt-2">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-3 w-36" />
+                <div className="flex gap-1.5 pt-1">
+                  <Skeleton className="h-7 w-20 rounded" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold">Deine Container</h2>
-        <p className="text-muted-foreground">
-          Verwalte deine Development- und Production-Container
-        </p>
-      </div>
-
       {error && (
         <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive">
           {error}
@@ -259,37 +288,22 @@ export default function DashboardPage() {
       )}
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="p-4 pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-5 w-5 shrink-0 rounded" />
-                    <Skeleton className="h-5 w-28" />
-                  </div>
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-3 w-full mt-2" />
-              </CardHeader>
-              <CardContent className="p-4 pt-2">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                    <Skeleton className="h-3 w-20" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-3 w-36" />
-                  <div className="flex gap-1.5 pt-1">
-                    <Skeleton className="h-7 w-20 rounded" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <>
+          {skeletonGrid}
+          {skeletonGrid}
+        </>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {containers.map((container) => {
+        <>
+          {[...categories].sort((a, b) => a.order - b.order).map((category) => {
+            const categoryContainers = containers.filter(
+              (c) => c.category === category.id
+            );
+            if (categoryContainers.length === 0) return null;
+            return (
+              <div key={category.id} className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">{category.display_name}</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {categoryContainers.map((container) => {
             const isBlocked = container.is_blocked === true;
             const busy = isActionInProgress(container.type);
 
@@ -482,7 +496,11 @@ export default function DashboardPage() {
               </Card>
             );
           })}
-        </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
       )}
 
       {/* Delete confirmation dialog */}

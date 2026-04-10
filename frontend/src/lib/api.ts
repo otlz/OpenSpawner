@@ -112,6 +112,13 @@ export interface Container {
   software?: string;
   icon?: string;
   port?: number;
+  category?: string;
+}
+
+export interface Category {
+  id: string;
+  display_name: string;
+  order: number;
 }
 
 export interface UserContainer {
@@ -129,6 +136,7 @@ export interface UserContainer {
 
 export interface ContainersResponse {
   containers: Container[];
+  categories: Category[];
 }
 
 export interface LaunchResponse {

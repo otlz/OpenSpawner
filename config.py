@@ -77,19 +77,21 @@ class Config:
         return [img.strip() for img in raw_images.split(';') if img.strip()]
 
     @staticmethod
-    def _load_templates_config() -> dict:
-        """Lädt Template-Metadaten aus templates.json."""
+    def _load_templates_config() -> tuple:
+        """Lädt Template-Metadaten und Kategorien aus templates.json."""
         config_path = Path(__file__).parent / 'templates.json'
         if not config_path.exists():
-            return {}
+            return {}, []
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            return {t['type']: t for t in data.get('templates', [])}
+            templates = {t['type']: t for t in data.get('templates', [])}
+            categories = data.get('categories', [])
+            return templates, categories
         except (json.JSONDecodeError, KeyError) as e:
             import sys
             print(f"[CONFIG] Warning: Error loading templates.json: {e}", file=sys.stderr)
-            return {}
+            return {}, []
 
     @classmethod
     def init_templates(cls):
@@ -98,7 +100,7 @@ class Config:
         Muss nach Klassendefinition aufgerufen werden.
         """
         cls.TEMPLATE_IMAGES = cls._load_template_images()
-        cls.TEMPLATES_CONFIG = cls._load_templates_config()
+        cls.TEMPLATES_CONFIG, cls.TEMPLATE_CATEGORIES = cls._load_templates_config()
 
         templates = {}
         for image in cls.TEMPLATE_IMAGES:
@@ -117,6 +119,7 @@ class Config:
                 'cpu_quota': config_meta.get('cpu_quota', cls.DEFAULT_CPU_QUOTA),
                 'pids_limit': config_meta.get('pids_limit', 100),
                 'cap_add': config_meta.get('cap_add', []),
+                'category': config_meta.get('category', 'software'),
             }
         cls.CONTAINER_TEMPLATES = templates
 

@@ -9,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider
       style={
         {
-          '--sidebar-width': '18rem',
+          '--sidebar-width': '16rem',
           '--header-height': '3rem',
         } as React.CSSProperties
       }

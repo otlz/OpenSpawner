@@ -500,8 +500,22 @@ else
         # Fallback auf :latest wenn kein Tag
         [ -z "$template_tag" ] && template_tag="latest"
 
-        # Vollständiger Pfad zum Template-Verzeichnis
-        template_dir="${INSTALL_DIR}/templates/${template_dir_name}"
+        # Vollständiger Pfad zum Template-Verzeichnis (aus templates.json build_context lesen)
+        build_context=$(python3 -c "
+import json, sys
+try:
+    with open('${INSTALL_DIR}/templates.json') as f:
+        data = json.load(f)
+    for t in data.get('templates', []):
+        if t.get('type') == '${template_dir_name}':
+            print(t.get('build_context', 'templates/${template_dir_name}'))
+            sys.exit(0)
+except Exception:
+    pass
+print('templates/${template_dir_name}')
+" 2>/dev/null || echo "templates/${template_dir_name}")
+
+        template_dir="${INSTALL_DIR}/${build_context}"
 
         echo "  [$BUILD_STEP/$TOTAL_BUILDS] Baue Template: ${template_dir_name}:${template_tag}"
 
@@ -574,7 +588,7 @@ else
     echo "  Prüfe auf ungekonfigurierte Template-Verzeichnisse..."
     UNUSED_COUNT=0
 
-    for template_dir in "${INSTALL_DIR}"/templates/template-*; do
+    while IFS= read -r template_dir; do
         [ -d "$template_dir" ] || continue
         template_name=$(basename "$template_dir")
 
@@ -586,7 +600,7 @@ else
             echo "        - ${template_name} (nicht in USER_TEMPLATE_IMAGES definiert)"
             UNUSED_COUNT=$((UNUSED_COUNT + 1))
         fi
-    done
+    done < <(find "${INSTALL_DIR}/templates" -mindepth 2 -maxdepth 2 -type d 2>/dev/null)
 
     if [ $UNUSED_COUNT -gt 0 ]; then
         echo "  Hinweis: Diese Templates wurden NICHT gebaut."

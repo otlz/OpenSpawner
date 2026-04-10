@@ -72,33 +72,43 @@ services:
 
   # User container templates (built once, spawned per user)
   template-nginx:
-    build: ./templates/template-nginx
+    build: ./templates/software/nginx
     image: template-nginx:latest
     profiles: ["build"]
 
   template-nextjs:
-    build: ./templates/template-nextjs
+    build: ./templates/software/nextjs
     image: template-nextjs:latest
     profiles: ["build"]
 
   template-dictionary:
-    build: ./templates/template-dictionary
+    build: ./templates/software/dictionary
     image: template-dictionary:latest
     profiles: ["build"]
 
   template-vcoder:
-    build: ./templates/template-vcoder
+    build: ./templates/software/vcoder
     image: template-vcoder:latest
     profiles: ["build"]
 
   template-vscode:
-    build: ./templates/template-vscode
+    build: ./templates/software/vscode
     image: template-vscode:latest
     profiles: ["build"]
 
   template-office:
-    build: ./templates/template-office
+    build: ./templates/software/office
     image: template-office:latest
+    profiles: ["build"]
+
+  template-linuxmint:
+    build: ./templates/os/linuxmint
+    image: template-linuxmint:latest
+    profiles: ["build"]
+
+  template-mariadb:
+    build: ./templates/database/mariadb
+    image: template-mariadb:latest
     profiles: ["build"]
 
 volumes:

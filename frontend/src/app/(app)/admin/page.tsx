@@ -474,7 +474,7 @@ export default function AdminPage() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold">Administration</h2>
         <p className="text-muted-foreground">
-          Benutzer- und Container-Verwaltung
+          Benutzer und Container verwalten
         </p>
       </div>
 

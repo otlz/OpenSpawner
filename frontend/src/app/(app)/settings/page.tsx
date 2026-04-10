@@ -62,7 +62,7 @@ export default function SettingsPage() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold">Einstellungen</h2>
         <p className="text-muted-foreground">
-          Verwalte deine Account-Einstellungen
+          Profil und Kontoinformationen
         </p>
       </div>
 
@@ -70,7 +70,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Profil</CardTitle>
-            <CardDescription>Deine Account-Informationen</CardDescription>
+            <CardDescription>E-Mail, Benutzername und Status</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -99,7 +99,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Account-Info</CardTitle>
-            <CardDescription>Zusätzliche Informationen</CardDescription>
+            <CardDescription>Erstellungsdatum und Aktivität</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {user?.created_at && (

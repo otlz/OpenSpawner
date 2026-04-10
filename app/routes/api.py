@@ -571,13 +571,15 @@ def api_user_containers():
             'os': template.get('os', 'Linux'),
             'software': template.get('software', ''),
             'icon': template.get('icon', ''),
-            'port': template.get('port', 8080)
+            'port': template.get('port', 8080),
+            'category': template.get('category', 'software'),
         })
 
     # Persist any status corrections from Docker queries
     db.session.commit()
 
-    return jsonify({'containers': containers}), 200
+    categories = current_app.config.get('TEMPLATE_CATEGORIES', [])
+    return jsonify({'containers': containers, 'categories': categories}), 200
 
 
 @api_bp.route('/container/launch/<container_type>', methods=['POST'])

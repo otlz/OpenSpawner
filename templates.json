@@ -1,10 +1,17 @@
 {
+  "categories": [
+    { "id": "software", "display_name": "Anwendungen", "order": 1 },
+    { "id": "os", "display_name": "Betriebssysteme", "order": 2 },
+    { "id": "database", "display_name": "Datenbanken", "order": 3 }
+  ],
   "templates": [
     {
       "type": "template-nginx",
       "image": "template-nginx:latest",
+      "category": "software",
+      "build_context": "templates/software/nginx",
       "display_name": "Nginx",
-      "description": "Einfacher Nginx-Server mit statischen Dateien und Willkommensseite",
+      "description": "Statischer Webserver mit Willkommensseite",
       "os": "Alpine Linux",
       "software": "Nginx 1.25",
       "icon": "SiNginx",
@@ -17,8 +24,10 @@
     {
       "type": "template-nextjs",
       "image": "template-nextjs:latest",
+      "category": "software",
+      "build_context": "templates/software/nextjs",
       "display_name": "Next.js Production",
-      "description": "React-Anwendung mit Shadcn/UI, TypeScript und modernem Build-Setup",
+      "description": "React App mit Shadcn/UI und TypeScript",
       "os": "Debian",
       "software": "Node.js 20",
       "icon": "SiNextdotjs",
@@ -31,8 +40,10 @@
     {
       "type": "template-dictionary",
       "image": "template-dictionary:latest",
+      "category": "software",
+      "build_context": "templates/software/dictionary",
       "display_name": "Wörterbuch",
-      "description": "Persönliches Wörterbuch mit Datenbank — Wörter und Definitionen speichern",
+      "description": "Wörter und Definitionen lokal speichern",
       "os": "Alpine Linux",
       "software": "SQLite + Python",
       "icon": "SiSqlite",
@@ -47,8 +58,10 @@
     {
       "type": "template-vcoder",
       "image": "template-vcoder:latest",
+      "category": "software",
+      "build_context": "templates/software/vcoder",
       "display_name": "ESP8266 IDE",
-      "description": "Web-IDE mit PlatformIO für ESP8266/Wemos-Entwicklung",
+      "description": "PlatformIO IDE für ESP8266 und Wemos",
       "os": "Debian",
       "software": "PlatformIO",
       "icon": "SiVisualstudiocode",
@@ -65,8 +78,10 @@
     {
       "type": "template-vscode",
       "image": "template-vscode:latest",
+      "category": "software",
+      "build_context": "templates/software/vscode",
       "display_name": "VS Code",
-      "description": "Saubere VS Code Instanz — Erweiterungen selbst installieren",
+      "description": "Code Server mit eigener Erweiterungsverwaltung",
       "os": "Debian",
       "software": "Code Server",
       "icon": "SiVisualstudiocode",
@@ -81,8 +96,10 @@
     {
       "type": "template-office",
       "image": "template-office:latest",
+      "category": "software",
+      "build_context": "templates/software/office",
       "display_name": "LibreOffice",
-      "description": "Office-Paket im Browser — Writer, Calc, Impress",
+      "description": "Writer, Calc und Impress im Browser",
       "os": "Debian",
       "software": "LibreOffice",
       "icon": "SiLibreoffice",
@@ -94,6 +111,43 @@
       "cpu_quota": 50000,
       "pids_limit": 256,
       "cap_add": ["FOWNER", "DAC_OVERRIDE", "SYS_CHROOT"]
+    },
+    {
+      "type": "template-linuxmint",
+      "image": "template-linuxmint:latest",
+      "category": "os",
+      "build_context": "templates/os/linuxmint",
+      "display_name": "Linux Desktop",
+      "description": "Ubuntu XFCE-Desktop im Browser — Linux kennenlernen und ausprobieren",
+      "os": "Ubuntu",
+      "software": "XFCE Desktop",
+      "icon": "SiLinux",
+      "port": 8080,
+      "volumes": [
+        { "name_suffix": "config", "mount_path": "/config" }
+      ],
+      "memory_limit": "1g",
+      "cpu_quota": 100000,
+      "pids_limit": 256,
+      "cap_add": ["FOWNER", "DAC_OVERRIDE", "SYS_CHROOT"]
+    },
+    {
+      "type": "template-mariadb",
+      "image": "template-mariadb:latest",
+      "category": "database",
+      "build_context": "templates/database/mariadb",
+      "display_name": "MariaDB + phpMyAdmin",
+      "description": "Datenbank mit Web-Interface — SQL und Datenbankgrundlagen erlernen",
+      "os": "Debian",
+      "software": "MariaDB + phpMyAdmin",
+      "icon": "SiMariadb",
+      "port": 8080,
+      "volumes": [
+        { "name_suffix": "data", "mount_path": "/var/lib/mysql" }
+      ],
+      "memory_limit": "512m",
+      "cpu_quota": 50000,
+      "pids_limit": 128
     }
   ]
 }

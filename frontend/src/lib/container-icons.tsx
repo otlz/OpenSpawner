@@ -1,4 +1,4 @@
-import { SiNginx, SiNextdotjs, SiSqlite, SiPlatformio, SiLibreoffice } from "react-icons/si";
+import { SiNginx, SiNextdotjs, SiSqlite, SiPlatformio, SiLibreoffice, SiLinux, SiMariadb } from "react-icons/si";
 import { Container as ContainerIcon } from "lucide-react";
 import type { IconType } from "react-icons";
 
@@ -21,6 +21,8 @@ const iconMap: Record<string, IconType> = {
   SiSqlite,
   SiPlatformio,
   SiLibreoffice,
+  SiLinux,
+  SiMariadb,
 };
 
 export function getContainerIcon(iconName?: string, className = "h-6 w-6") {
