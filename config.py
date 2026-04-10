@@ -105,11 +105,16 @@ class Config:
             templates[container_type] = {
                 'image': image,
                 'display_name': config_meta.get('display_name', container_type.replace('-', ' ').title()),
-                'description': config_meta.get('description', f'Container based on {image}'),
+                'description': config_meta.get('description', f'Container basierend auf {image}'),
                 'os': config_meta.get('os', 'Linux'),
                 'software': config_meta.get('software', ''),
                 'icon': config_meta.get('icon', ''),
-                'port': config_meta.get('port', 8080)
+                'port': config_meta.get('port', 8080),
+                'volumes': config_meta.get('volumes', []),
+                'memory_limit': config_meta.get('memory_limit', cls.DEFAULT_MEMORY_LIMIT),
+                'cpu_quota': config_meta.get('cpu_quota', cls.DEFAULT_CPU_QUOTA),
+                'pids_limit': config_meta.get('pids_limit', 100),
+                'cap_add': config_meta.get('cap_add', []),
             }
         cls.CONTAINER_TEMPLATES = templates
 
@@ -157,8 +162,10 @@ class Config:
     DEFAULT_MEMORY_LIMIT = os.getenv('DEFAULT_MEMORY_LIMIT', '512m')
     DEFAULT_CPU_QUOTA = int(os.getenv('DEFAULT_CPU_QUOTA', 50000))  # 0.5 CPU
 
-    # Container cleanup
-    CONTAINER_IDLE_TIMEOUT = int(os.getenv('CONTAINER_IDLE_TIMEOUT', 3600))  # 1h in seconds
+    # Container lifecycle
+    CONTAINER_IDLE_TIMEOUT = int(os.getenv('CONTAINER_IDLE_TIMEOUT', 3600))  # 1h -> stop
+    CONTAINER_STALE_TIMEOUT = int(os.getenv('CONTAINER_STALE_TIMEOUT', 604800))  # 7 days -> remove (keep volumes)
+    REAPER_INTERVAL = int(os.getenv('REAPER_INTERVAL', 60))  # Check every 60s
 
     # ========================================
     # SMTP / Email Configuration

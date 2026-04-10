@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { useHeartbeat } from "@/hooks/use-heartbeat";
 import { api, type Container } from "@/lib/api";
 import {
   Card,
@@ -49,6 +50,13 @@ export default function DashboardPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // Send heartbeats for all running containers
+  const runningTypes = useMemo(
+    () => containers.filter((c) => c.status === "running").map((c) => c.type),
+    [containers]
+  );
+  useHeartbeat(runningTypes);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -355,7 +363,7 @@ export default function DashboardPage() {
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {isBlocked ? (
                         <Button size="sm" variant="destructive" disabled>
-                          <ShieldAlert className="mr-1.5 h-3.5 w-3.5" />
+                          <ShieldAlert className="h-4 w-4" />
                           Gesperrt
                         </Button>
                       ) : container.status === "not_created" ? (
@@ -366,12 +374,12 @@ export default function DashboardPage() {
                         >
                           {launching === container.type ? (
                             <>
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              <Loader2 className="h-4 w-4 animate-spin" />
                               Wird erstellt...
                             </>
                           ) : (
                             <>
-                              <Play className="mr-1.5 h-3.5 w-3.5" />
+                              <Play className="h-4 w-4" />
                               Erstellen
                             </>
                           )}
@@ -384,7 +392,7 @@ export default function DashboardPage() {
                               onClick={() => window.open(container.service_url, "_blank")}
                               disabled={busy}
                             >
-                              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                              <ExternalLink className="h-4 w-4" />
                               Öffnen
                             </Button>
                           )}
@@ -396,9 +404,9 @@ export default function DashboardPage() {
                               disabled={busy}
                             >
                               {launching === container.type ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Play className="mr-1.5 h-3.5 w-3.5" />
+                                <Play className="h-4 w-4" />
                               )}
                               Starten
                             </Button>
@@ -412,9 +420,9 @@ export default function DashboardPage() {
                               disabled={busy}
                             >
                               {restarting === container.type ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                <RefreshCw className="h-4 w-4" />
                               )}
                               Neustarten
                             </Button>
@@ -428,9 +436,9 @@ export default function DashboardPage() {
                               disabled={busy}
                             >
                               {stopping === container.type ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Square className="mr-1.5 h-3.5 w-3.5" />
+                                <Square className="h-4 w-4" />
                               )}
                               Stoppen
                             </Button>
@@ -444,9 +452,9 @@ export default function DashboardPage() {
                               disabled={busy}
                             >
                               {restarting === container.type ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                <RefreshCw className="h-4 w-4" />
                               )}
                               Neustarten
                             </Button>
@@ -460,9 +468,9 @@ export default function DashboardPage() {
                             disabled={busy}
                           >
                             {deleting === container.type ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             )}
                             Löschen
                           </Button>
@@ -495,9 +503,9 @@ export default function DashboardPage() {
               disabled={deleting !== null}
             >
               {deleting ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               )}
               Endgültig löschen
             </AlertDialogAction>

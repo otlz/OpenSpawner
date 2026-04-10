@@ -72,6 +72,33 @@ class ContainerManager:
             return int(ports[0]['HostPort'])
         return None
 
+    @staticmethod
+    def _build_volume_name(user_id, container_type, name_suffix):
+        """Builds a named Docker volume name for a user container."""
+        return f"spawner-user{user_id}-{container_type}-{name_suffix}"
+
+    def _build_volumes(self, user_id, container_type, volume_specs):
+        """Builds named Docker volumes dict from template volume specs.
+
+        Args:
+            user_id: The user's ID
+            container_type: Template type (e.g. 'vcoder', 'dictionary')
+            volume_specs: List of {'name_suffix': str, 'mount_path': str} from templates.json
+
+        Returns:
+            Dict for Docker SDK containers.run() volumes parameter, or None if no volumes.
+        """
+        if not volume_specs:
+            return None
+
+        volumes = {}
+        for spec in volume_specs:
+            vol_name = self._build_volume_name(user_id, container_type, spec['name_suffix'])
+            volumes[vol_name] = {'bind': spec['mount_path'], 'mode': 'rw'}
+            print(f"[SPAWNER]   Volume: {vol_name} -> {spec['mount_path']}")
+
+        return volumes
+
     def start_container(self, container_id):
         """Startet einen gestoppten Benutzer-Container."""
         try:
@@ -101,6 +128,29 @@ class ContainerManager:
         except docker.errors.NotFound:
             return False
 
+    def remove_volumes(self, user_id, container_type, volume_specs):
+        """Entfernt alle Named Volumes eines Benutzer-Containers.
+
+        Args:
+            user_id: The user's ID
+            container_type: Template type
+            volume_specs: List of volume specs from template config
+        """
+        if not volume_specs:
+            return
+
+        client = self._get_client()
+        for spec in volume_specs:
+            vol_name = self._build_volume_name(user_id, container_type, spec['name_suffix'])
+            try:
+                volume = client.volumes.get(vol_name)
+                volume.remove(force=True)
+                print(f"[SPAWNER] Volume {vol_name} removed")
+            except docker.errors.NotFound:
+                pass
+            except Exception as e:
+                print(f"[SPAWNER] WARNING: Could not remove volume {vol_name}: {str(e)}")
+
     def get_container_status(self, container_id):
         """Gibt den Status eines Containers zurück (running, stopped, not_found, etc.)."""
         try:
@@ -126,16 +176,44 @@ class ContainerManager:
                 return port
         return 8080
 
-    def spawn_multi_container(self, user_id: int, slug: str, container_type: str) -> tuple:
+    def remove_old_containers(self, user_id, container_type):
+        """Entfernt alte Container des gleichen Typs für einen Benutzer.
+
+        Used by ContainerOrchestrator.recreate() to prevent Traefik router conflicts.
         """
-        Erstellt einen Container für einen Benutzer mit einem bestimmten Template-Typ.
-        Entfernt vorher alte Container des gleichen Typs (Konflikt-Vermeidung).
+        try:
+            filters = {
+                'label': [
+                    f'spawner.user_id={user_id}',
+                    f'spawner.container_type={container_type}'
+                ]
+            }
+            old_containers = self._get_client().containers.list(all=True, filters=filters)
+            for old_container in old_containers:
+                if old_container.status == 'running':
+                    try:
+                        old_container.stop(timeout=5)
+                        print(f"[SPAWNER] Old container {old_container.name} stopped")
+                    except Exception as e:
+                        print(f"[SPAWNER] WARNING: Could not stop old container: {str(e)}")
+                try:
+                    old_container.remove(force=True)
+                    print(f"[SPAWNER] Old container {old_container.name} removed (conflict prevention)")
+                except Exception as e:
+                    print(f"[SPAWNER] WARNING: Could not remove old container: {str(e)}")
+        except Exception as e:
+            print(f"[SPAWNER] WARNING: Error removing old containers: {str(e)}")
+
+    def spawn_container(self, user_id, slug, container_type):
+        """
+        Erstellt einen neuen Container für einen Benutzer.
+
+        Does NOT remove old containers — that's the orchestrator's responsibility.
 
         Returns:
             (container_id, container_port)
         """
         try:
-            # Get template config
             template = Config.CONTAINER_TEMPLATES.get(container_type)
             if not template:
                 raise ValueError(f"Invalid container type: {container_type}")
@@ -148,31 +226,6 @@ class ContainerManager:
             if Config.TRAEFIK_ENABLED:
                 labels.update(self._build_traefik_labels(user_id, slug, container_type))
 
-            # Remove old containers with same user_id and container_type
-            # This prevents Traefik router conflicts with multiple containers
-            try:
-                filters = {
-                    'label': [
-                        f'spawner.user_id={user_id}',
-                        f'spawner.container_type={container_type}'
-                    ]
-                }
-                old_containers = self._get_client().containers.list(all=True, filters=filters)
-                for old_container in old_containers:
-                    if old_container.status == 'running':
-                        try:
-                            old_container.stop(timeout=5)
-                            print(f"[SPAWNER] Old container {old_container.name} stopped")
-                        except Exception as e:
-                            print(f"[SPAWNER] WARNING: Could not stop old container: {str(e)}")
-                    try:
-                        old_container.remove(force=True)
-                        print(f"[SPAWNER] Old container {old_container.name} removed (conflict prevention)")
-                    except Exception as e:
-                        print(f"[SPAWNER] WARNING: Could not remove old container: {str(e)}")
-            except Exception as e:
-                print(f"[SPAWNER] WARNING: Error removing old containers: {str(e)}")
-
             print(f"[SPAWNER] Creating {container_type} container {container_name}")
             print(f"[SPAWNER] Image: {image}")
             if Config.TRAEFIK_ENABLED:
@@ -181,17 +234,8 @@ class ContainerManager:
                     if 'traefik' in key:
                         print(f"[SPAWNER]   {key}: {value}")
 
-            # Persistent volumes for specific container types
-            volumes = {}
-            if container_type == 'vcoder':
-                data_path = f"/data/users/{user_id}/vcoder"
-                volumes = {
-                    f"{data_path}/workspace": {'bind': '/home/coder/project', 'mode': 'rw'},
-                    f"{data_path}/platformio": {'bind': '/home/coder/.platformio', 'mode': 'rw'},
-                }
-                print(f"[SPAWNER] Volumes for vcoder:")
-                for host, vol_config in volumes.items():
-                    print(f"[SPAWNER]   {host} -> {vol_config['bind']}")
+            # Build named volumes from template config
+            volumes = self._build_volumes(user_id, container_type, template.get('volumes', []))
 
             # Environment variables for container
             env_vars = {
@@ -204,16 +248,30 @@ class ContainerManager:
             # Port mapping for local mode (no Traefik)
             ports = {'8080/tcp': None} if not Config.TRAEFIK_ENABLED else None
 
+            # Per-template resource limits
+            memory_limit = template.get('memory_limit', Config.DEFAULT_MEMORY_LIMIT)
+            cpu_quota = template.get('cpu_quota', Config.DEFAULT_CPU_QUOTA)
+            pids_limit = template.get('pids_limit', 100)
+
+            # Security: minimal capabilities
+            base_caps = ['CHOWN', 'SETUID', 'SETGID', 'NET_BIND_SERVICE']
+            extra_caps = template.get('cap_add', [])
+            cap_add = list(set(base_caps + extra_caps))
+
             container = self._get_client().containers.run(
                 image=image,
                 name=container_name,
                 detach=True,
                 labels=labels,
                 environment=env_vars,
-                restart_policy={'Name': 'unless-stopped'},
-                mem_limit=Config.DEFAULT_MEMORY_LIMIT,
-                cpu_quota=Config.DEFAULT_CPU_QUOTA,
-                volumes=volumes if volumes else None,
+                restart_policy={'Name': 'no'},
+                mem_limit=memory_limit,
+                cpu_quota=cpu_quota,
+                pids_limit=pids_limit,
+                cap_drop=['ALL'],
+                cap_add=cap_add,
+                security_opt=['no-new-privileges:true'],
+                volumes=volumes,
                 ports=ports
             )
 
@@ -269,3 +327,6 @@ class ContainerManager:
         except Exception as e:
             print(f"[SPAWNER] ERROR: {str(e)}")
             raise
+
+    # Backward compatibility alias
+    spawn_multi_container = spawn_container

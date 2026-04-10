@@ -162,6 +162,11 @@ export interface RestartByTypeResponse {
   status: string;
 }
 
+export interface HeartbeatResponse {
+  status: string;
+  idle_timeout: number;
+}
+
 // ============================================================
 // Admin Interfaces
 // ============================================================
@@ -312,6 +317,16 @@ export const api = {
 
   restartContainerByType: (containerType: string) =>
     fetchApi<RestartByTypeResponse>(`/api/container/restart/${containerType}`, {
+      method: "POST",
+    }),
+
+  recreateContainer: (containerType: string) =>
+    fetchApi<RestartByTypeResponse>(`/api/container/recreate/${containerType}`, {
+      method: "POST",
+    }),
+
+  heartbeat: (containerType: string) =>
+    fetchApi<HeartbeatResponse>(`/api/container/heartbeat/${containerType}`, {
       method: "POST",
     }),
 };

@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flasgger import Swagger
+from flask_apscheduler import APScheduler
 from sqlalchemy import text
 from sqlalchemy import inspect as sa_inspect
 from app.extensions import db, login_manager, jwt
@@ -13,6 +14,8 @@ from config import Config
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+
+scheduler = APScheduler()
 
 
 def create_app():
@@ -149,9 +152,54 @@ def create_app():
     with app.app_context():
         db.create_all()
         _migrate_is_admin_to_role(app)
+        _migrate_add_container_status(app)
         app.logger.info('Database tables created')
 
+    # Initialize container reaper (idle timeout / stale cleanup)
+    # Guard against double-start in Flask debug reloader
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        from app.services.container_reaper import ContainerReaper
+
+        reaper = ContainerReaper(app)
+        app.config['SCHEDULER_API_ENABLED'] = False
+
+        scheduler.init_app(app)
+        scheduler.add_job(
+            id='reap_idle',
+            func=reaper.reap_idle_containers,
+            trigger='interval',
+            seconds=Config.REAPER_INTERVAL
+        )
+        scheduler.add_job(
+            id='reap_stale',
+            func=reaper.reap_stale_containers,
+            trigger='interval',
+            seconds=3600
+        )
+        scheduler.start()
+        app.logger.info(
+            f'[REAPER] Started (idle={Config.CONTAINER_IDLE_TIMEOUT}s, '
+            f'stale={Config.CONTAINER_STALE_TIMEOUT}s, interval={Config.REAPER_INTERVAL}s)'
+        )
+
     return app
+
+
+def _migrate_add_container_status(app):
+    """Migration: Add status column to user_container if missing."""
+    inspector = sa_inspect(db.engine)
+    columns = [c['name'] for c in inspector.get_columns('user_container')]
+
+    if 'status' in columns:
+        return  # Already migrated
+
+    with db.engine.connect() as conn:
+        conn.execute(text("ALTER TABLE user_container ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'not_created'"))
+        # Set existing containers with a container_id to 'running' — the reaper will
+        # check actual Docker status and correct to 'stopped' on its next tick
+        conn.execute(text("UPDATE user_container SET status = 'running' WHERE container_id IS NOT NULL"))
+        conn.commit()
+    app.logger.info('[MIGRATION] Added status column to user_container')
 
 
 def _migrate_is_admin_to_role(app):

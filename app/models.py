@@ -157,6 +157,9 @@ class UserContainer(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_used = db.Column(db.DateTime)
 
+    # Container lifecycle status (not_created, running, stopped, error)
+    status = db.Column(db.String(20), default='not_created', nullable=False)
+
     # Container blocking
     is_blocked = db.Column(db.Boolean, default=False, nullable=False, index=True)
     blocked_at = db.Column(db.DateTime, nullable=True)
@@ -185,6 +188,7 @@ class UserContainer(db.Model):
             'template_image': self.template_image,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_used': self.last_used.isoformat() if self.last_used else None,
+            'status': self.status,
             'is_blocked': self.is_blocked,
             'blocked_at': self.blocked_at.isoformat() if self.blocked_at else None
         }

@@ -231,7 +231,7 @@ export default function AdminPage() {
     toast.loading(`${label}: ${selectedUserIds.size} User...`, { id: toastId });
     let success = 0, failed = 0;
 
-    for (const userId of selectedUserIds) {
+    for (const userId of Array.from(selectedUserIds)) {
       const { error } = await action(userId);
       error ? failed++ : success++;
     }
@@ -274,7 +274,7 @@ export default function AdminPage() {
     toast.loading(`Lösche ${selectedUserIds.size} User...`, { id: "bulk-delete-users" });
     let success = 0, failed = 0;
 
-    for (const userId of selectedUserIds) {
+    for (const userId of Array.from(selectedUserIds)) {
       const { error } = await adminApi.deleteUser(userId);
       error ? failed++ : success++;
     }
@@ -294,7 +294,7 @@ export default function AdminPage() {
     toast.loading(`Sperre ${selectedContainerIds.size} Container...`, { id: "bulk-block-containers" });
     let success = 0, failed = 0;
 
-    for (const containerId of selectedContainerIds) {
+    for (const containerId of Array.from(selectedContainerIds)) {
       const { error } = await adminApi.blockContainer(containerId);
       error ? failed++ : success++;
     }
@@ -313,7 +313,7 @@ export default function AdminPage() {
     toast.loading(`Entsperre ${selectedContainerIds.size} Container...`, { id: "bulk-unblock-containers" });
     let success = 0, failed = 0;
 
-    for (const containerId of selectedContainerIds) {
+    for (const containerId of Array.from(selectedContainerIds)) {
       const { error } = await adminApi.unblockContainer(containerId);
       error ? failed++ : success++;
     }
@@ -334,7 +334,7 @@ export default function AdminPage() {
     }
 
     const userMap = new Map<number, { email: string; count: number }>();
-    for (const containerId of selectedContainerIds) {
+    for (const containerId of Array.from(selectedContainerIds)) {
       const u = users.find((u) => u.containers?.some((c) => c.id === containerId));
       if (u) {
         const existing = userMap.get(u.id) || { email: u.email, count: 0 };

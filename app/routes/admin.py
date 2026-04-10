@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from app.models import db, User, UserState, UserRole, AdminTakeoverSession, MagicLinkToken, UserContainer, EmailRule
 from app.decorators import admin_required
 from app.services.container_manager import ContainerManager
+from app.services.container_orchestrator import ContainerOrchestrator
 from config import Config
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -93,6 +94,7 @@ def block_user(user_id):
             try:
                 if container.container_id:
                     container_mgr.stop_container(container.container_id)
+                    container.status = 'stopped'
             except Exception as e:
                 current_app.logger.warning(f"Failed to stop container: {str(e)}")
 
@@ -390,7 +392,9 @@ def delete_user(user_id):
         'takeover_sessions_deleted': 0
     }
 
-    # 1. Delete all Docker containers
+    # 1. Delete all Docker containers and their volumes
+    # Use manager directly (not orchestrator.destroy) because cascade='all, delete-orphan'
+    # on User.containers handles DB deletion when user is deleted below
     container_mgr = ContainerManager()
     for container in user.containers:
         if container.container_id:
@@ -402,6 +406,9 @@ def delete_user(user_id):
             except Exception as e:
                 current_app.logger.warning(f"Container {container.container_id[:12]} failed: {str(e)}")
                 deletion_summary['containers_failed'].append(container.container_id[:12])
+        # Clean up named volumes
+        template = Config.CONTAINER_TEMPLATES.get(container.container_type, {})
+        container_mgr.remove_volumes(container.user_id, container.container_type, template.get('volumes', []))
 
     # 2. Delete MagicLinkTokens (GDPR: IP addresses)
     magic_tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
@@ -741,6 +748,7 @@ def block_container(container_id):
     try:
         if container.container_id:
             container_mgr.stop_container(container.container_id)
+            container.status = 'stopped'
     except Exception as e:
         current_app.logger.warning(f"Failed to stop container: {str(e)}")
 
@@ -809,6 +817,7 @@ def bulk_block_containers():
         try:
             if container.container_id:
                 container_mgr.stop_container(container.container_id)
+                container.status = 'stopped'
         except Exception as e:
             current_app.logger.warning(f"Failed to stop container {container_id}: {str(e)}")
 
