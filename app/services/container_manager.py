@@ -1,12 +1,17 @@
+"""Container-Verwaltung für Docker-basierte Benutzer-Container."""
+import time
 import docker
 from config import Config
 
+
 class ContainerManager:
+    """Verwaltet Docker-Container für Benutzer (erstellen, starten, stoppen, löschen)."""
+
     def __init__(self):
         self.client = None
 
     def _get_client(self):
-        """Lazy initialization of Docker client"""
+        """Lazy-Initialisierung des Docker-Clients."""
         if self.client is None:
             try:
                 self.client = docker.from_env()
@@ -15,7 +20,7 @@ class ContainerManager:
         return self.client
 
     def _build_traefik_labels(self, user_id, slug, container_type=None):
-        """Build Traefik routing labels for a user container"""
+        """Erstellt Traefik-Routing-Labels für einen Benutzer-Container."""
         base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
         router_name = f"user{user_id}" if not container_type else f"user{user_id}-{container_type}"
         path_slug = slug if not container_type else f"{slug}-{container_type}"
@@ -37,7 +42,7 @@ class ContainerManager:
         }
 
     def _build_metadata_labels(self, user_id, slug, container_type=None):
-        """Build spawner metadata labels"""
+        """Erstellt Spawner-Metadaten-Labels für Container-Zuordnung."""
         labels = {
             'spawner.user_id': str(user_id),
             'spawner.slug': slug,
@@ -48,7 +53,7 @@ class ContainerManager:
         return labels
 
     def _connect_container_to_network(self, container, network_name, fatal=True):
-        """Connect a container to the specified Docker network"""
+        """Verbindet einen Container mit dem angegebenen Docker-Netzwerk."""
         try:
             network = self._get_client().networks.get(network_name)
             network.connect(container)
@@ -60,81 +65,15 @@ class ContainerManager:
                 raise Exception(f"Could not connect container to network '{network_name}': {str(e)}")
 
     def _get_assigned_port(self, container):
-        """Get the host port assigned by Docker for port 8080"""
+        """Liest den vom Docker zugewiesenen Host-Port für Port 8080 aus."""
         container.reload()
         ports = container.ports.get('8080/tcp')
         if ports and len(ports) > 0:
             return int(ports[0]['HostPort'])
         return None
 
-    def spawn_container(self, user_id, slug):
-        """Spawn a new container for a user"""
-        try:
-            existing = self._get_user_container(slug)
-            if existing and existing.status == 'running':
-                return existing.id, self._get_container_port(existing)
-
-            # Build labels
-            labels = self._build_metadata_labels(user_id, slug)
-            if Config.TRAEFIK_ENABLED:
-                labels.update(self._build_traefik_labels(user_id, slug))
-
-            print(f"[SPAWNER] Creating container user-{slug}-{user_id}")
-            if Config.TRAEFIK_ENABLED:
-                print(f"[SPAWNER] Traefik Labels:")
-                for key, value in labels.items():
-                    if 'traefik' in key:
-                        print(f"[SPAWNER]   {key}: {value}")
-
-            # Port mapping for local mode (no Traefik)
-            ports = {'8080/tcp': None} if not Config.TRAEFIK_ENABLED else None
-
-            container = self._get_client().containers.run(
-                Config.USER_TEMPLATE_IMAGE,
-                name=f"user-{slug}-{user_id}",
-                detach=True,
-                labels=labels,
-                environment={
-                    'USER_ID': str(user_id),
-                    'USER_SLUG': slug,
-                    'JWT_SECRET': Config.SECRET_KEY
-                },
-                restart_policy={'Name': 'unless-stopped'},
-                mem_limit=Config.DEFAULT_MEMORY_LIMIT,
-                cpu_quota=Config.DEFAULT_CPU_QUOTA,
-                ports=ports
-            )
-
-            # Connect to network
-            network_name = Config.TRAEFIK_NETWORK if Config.TRAEFIK_ENABLED else Config.CONTAINER_NETWORK
-            self._connect_container_to_network(container, network_name, fatal=Config.TRAEFIK_ENABLED)
-
-            # Determine access port
-            if Config.TRAEFIK_ENABLED:
-                base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
-                print(f"[SPAWNER] Container created: {container.id[:12]}")
-                print(f"[SPAWNER] URL: https://{base_host}/{slug}")
-                return container.id, 8080
-            else:
-                host_port = self._get_assigned_port(container)
-                print(f"[SPAWNER] Container created: {container.id[:12]}")
-                print(f"[SPAWNER] URL: http://localhost:{host_port}")
-                return container.id, host_port or 8080
-
-        except docker.errors.ImageNotFound:
-            error_msg = f"Template image '{Config.USER_TEMPLATE_IMAGE}' not found"
-            print(f"[SPAWNER] ERROR: {error_msg}")
-            raise Exception(error_msg)
-        except docker.errors.APIError as e:
-            error_msg = f"Docker API error: {str(e)}"
-            print(f"[SPAWNER] ERROR: {error_msg}")
-            raise Exception(error_msg)
-        except Exception as e:
-            print(f"[SPAWNER] ERROR: {str(e)}")
-            raise
-
     def start_container(self, container_id):
-        """Start a stopped user container"""
+        """Startet einen gestoppten Benutzer-Container."""
         try:
             container = self._get_client().containers.get(container_id)
             if container.status != 'running':
@@ -145,7 +84,7 @@ class ContainerManager:
             return False
 
     def stop_container(self, container_id):
-        """Stop a user container"""
+        """Stoppt einen Benutzer-Container."""
         try:
             container = self._get_client().containers.get(container_id)
             container.stop(timeout=10)
@@ -154,7 +93,7 @@ class ContainerManager:
             return False
 
     def remove_container(self, container_id):
-        """Remove a user container completely"""
+        """Entfernt einen Benutzer-Container vollständig."""
         try:
             container = self._get_client().containers.get(container_id)
             container.remove(force=True)
@@ -163,7 +102,7 @@ class ContainerManager:
             return False
 
     def get_container_status(self, container_id):
-        """Get a container's status"""
+        """Gibt den Status eines Containers zurück (running, exited, not_found, etc.)."""
         try:
             container = self._get_client().containers.get(container_id)
             return container.status
@@ -171,13 +110,13 @@ class ContainerManager:
             return 'not_found'
 
     def _get_user_container(self, slug):
-        """Find existing container for a user"""
+        """Sucht einen existierenden Container anhand des User-Slugs."""
         filters = {'label': f'spawner.slug={slug}'}
         containers = self._get_client().containers.list(all=True, filters=filters)
         return containers[0] if containers else None
 
     def _get_container_port(self, container):
-        """Extract port from container config"""
+        """Ermittelt den Port eines Containers (Traefik: 8080, lokal: zugewiesener Port)."""
         if not Config.TRAEFIK_ENABLED:
             port = self._get_assigned_port(container)
             if port:
@@ -186,12 +125,8 @@ class ContainerManager:
 
     def spawn_multi_container(self, user_id: int, slug: str, container_type: str) -> tuple:
         """
-        Spawn a container for a user with a specific type.
-
-        Args:
-            user_id: User ID
-            slug: User slug (for URL routing)
-            container_type: Template type (e.g. 'template-01', 'template-next')
+        Erstellt einen Container für einen Benutzer mit einem bestimmten Template-Typ.
+        Entfernt vorher alte Container des gleichen Typs (Konflikt-Vermeidung).
 
         Returns:
             (container_id, container_port)
@@ -283,17 +218,17 @@ class ContainerManager:
             network_name = Config.TRAEFIK_NETWORK if Config.TRAEFIK_ENABLED else Config.CONTAINER_NETWORK
             self._connect_container_to_network(container, network_name, fatal=Config.TRAEFIK_ENABLED)
 
-            # Wait for container to be ready
+            # Warte bis Container bereit ist
             print(f"[SPAWNER] Waiting for container startup...")
-            import time
+            startup_wait = getattr(Config, 'CONTAINER_STARTUP_WAIT', 2)
             max_retries = 30
             retry_count = 0
             while retry_count < max_retries:
                 try:
                     container.reload()
                     if container.status == 'running':
-                        print(f"[SPAWNER] Container running, waiting 2s for service startup...")
-                        time.sleep(2)
+                        print(f"[SPAWNER] Container running, waiting {startup_wait}s for service startup...")
+                        time.sleep(startup_wait)
                         print(f"[SPAWNER] Container ready!")
                         break
                 except Exception as e:
@@ -302,8 +237,10 @@ class ContainerManager:
                 retry_count += 1
                 time.sleep(1)
 
+            # Container konnte nicht gestartet werden — Fehler statt falsch-positiv
             if retry_count >= max_retries:
-                print(f"[SPAWNER] WARNING: Container not ready after {max_retries}s")
+                container.remove(force=True)
+                raise Exception(f"Container {container_name} not ready after {max_retries} retries")
 
             # Determine access port and URL
             if Config.TRAEFIK_ENABLED:

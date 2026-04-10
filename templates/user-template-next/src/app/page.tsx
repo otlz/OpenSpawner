@@ -62,7 +62,7 @@ export default function Home() {
                 <Terminal className="h-5 w-5 text-primary" />
               </div>
               <CardTitle>Technologie</CardTitle>
-              <CardDescription>Moderne Tools fuer moderne Apps</CardDescription>
+              <CardDescription>Moderne Tools für moderne Apps</CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -72,11 +72,11 @@ export default function Home() {
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  TypeScript fuer Typsicherheit
+                  TypeScript für Typsicherheit
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  Tailwind CSS fuer Styling
+                  Tailwind CSS für Styling
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />

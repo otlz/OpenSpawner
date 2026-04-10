@@ -24,7 +24,7 @@ fi
 VERSION=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo "dev")
 LOG_FILE="${INSTALL_DIR}/spawner-install.log"
 
-# Farben fuer Output
+# Farben für Output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -37,7 +37,7 @@ MIN_COMPOSE_VERSION="2.0"
 
 # ============================================================
 # Hilfsfunktion: Versionen vergleichen (BusyBox/Synology kompatibel)
-# Gibt 0 zurueck wenn $1 >= $2, sonst 1
+# Gibt 0 zurück wenn $1 >= $2, sonst 1
 # ============================================================
 version_gte() {
     # Vergleiche zwei Versionen (z.B. "20.10.21" >= "20.10")
@@ -45,7 +45,7 @@ version_gte() {
     local ver1="$1"
     local ver2="$2"
 
-    # Extrahiere Major.Minor.Patch (fuege .0 hinzu falls noetig)
+    # Extrahiere Major.Minor.Patch (fuege .0 hinzu falls nötig)
     local v1_major v1_minor v1_patch
     local v2_major v2_minor v2_patch
 
@@ -94,7 +94,7 @@ echo "=== Spawner Installation $(date) ===" > "${LOG_FILE}"
 echo "" >> "${LOG_FILE}"
 
 # ============================================================
-# 1. Pruefe .env
+# 1. Prüfe .env
 # ============================================================
 if [ ! -f "${INSTALL_DIR}/.env" ]; then
     echo -e "${YELLOW}HINWEIS: Keine .env-Datei gefunden!${NC}"
@@ -113,13 +113,13 @@ if [ ! -f "${INSTALL_DIR}/.env" ]; then
 
     echo -e "${GREEN}Vorlage erstellt: .env.example${NC}"
     echo ""
-    echo "Naechste Schritte:"
+    echo "Nächste Schritte:"
     echo "  1. Kopiere die Vorlage:  cp .env.example .env"
     echo "  2. Passe die Werte an:   nano .env"
     echo "     - SECRET_KEY generieren (siehe Kommentar in .env)"
     echo "     - BASE_DOMAIN setzen"
-    echo "     - TRAEFIK_NETWORK pruefen"
-    echo "  3. Fuehre erneut aus:    bash install.sh"
+    echo "     - TRAEFIK_NETWORK prüfen"
+    echo "  3. Führe erneut aus:    bash install.sh"
     echo ""
     exit 0
 fi
@@ -132,12 +132,12 @@ source "${INSTALL_DIR}/.env"
 set +a
 
 # ============================================================
-# 2. Pruefe Voraussetzungen
+# 2. Prüfe Voraussetzungen
 # ============================================================
 echo ""
-echo "Pruefe Voraussetzungen..."
+echo "Prüfe Voraussetzungen..."
 
-# Docker - Existenz und Version pruefen
+# Docker - Existenz und Version prüfen
 if ! command -v docker >/dev/null 2>&1; then
     echo -e "${RED}Fehler: Docker nicht gefunden!${NC}"
     echo "Installiere Docker: https://docs.docker.com/get-docker/"
@@ -160,7 +160,7 @@ else
     exit 1
 fi
 
-# Docker Compose - Existenz und Version pruefen
+# Docker Compose - Existenz und Version prüfen
 # BusyBox-kompatibel (kein grep -P)
 COMPOSE_VERSION=""
 if docker compose version >/dev/null 2>&1; then
@@ -197,20 +197,20 @@ fi
 echo -e "  Git:            ${GREEN}OK${NC}"
 
 # ============================================================
-# 3. Pruefe ob bereits installiert (Update vs. Neuinstallation)
+# 3. Prüfe ob bereits installiert (Update vs. Neuinstallation)
 # ============================================================
 echo ""
 
-# Git safe.directory setzen (fuer NAS/Container-Umgebungen)
+# Git safe.directory setzen (für NAS/Container-Umgebungen)
 git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
 
 if [ -d "${INSTALL_DIR}/.git" ]; then
-    echo -e "${YELLOW}Update erkannt - hole neueste Aenderungen...${NC}"
+    echo -e "${YELLOW}Update erkannt - hole neueste Änderungen...${NC}"
 
     cd "${INSTALL_DIR}"
 
     # WICHTIG: Auf Synology gibt es Berechtigungsbits-Unterschiede (old mode 100644 vs new mode 100755)
-    # Diese sind KEINE echten Code-Aenderungen, daher einfach die Remote-Version nehmen
+    # Diese sind KEINE echten Code-Änderungen, daher einfach die Remote-Version nehmen
     git fetch origin 2>/dev/null || true
 
     # Versuche git pull
@@ -247,7 +247,7 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
 else
     echo "Neuinstallation - klone Repository..."
 
-    # Temporaeres Verzeichnis fuer Clone
+    # Temporaeres Verzeichnis für Clone
     TEMP_DIR=$(mktemp -d)
 
     if git clone "${REPO_URL}" "${TEMP_DIR}"; then
@@ -260,7 +260,7 @@ else
             fi
         done
 
-        # .git Verzeichnis kopieren fuer Updates
+        # .git Verzeichnis kopieren für Updates
         cp -r "${TEMP_DIR}/.git" "${INSTALL_DIR}/"
 
         rm -rf "${TEMP_DIR}"
@@ -283,15 +283,15 @@ echo "Setze Verzeichnisse und Berechtigungen..."
 mkdir -p "${INSTALL_DIR}/data"
 mkdir -p "${INSTALL_DIR}/logs"
 
-# Berechtigungen setzen (rwx fuer Owner, rx fuer Group/Other)
+# Berechtigungen setzen (rwx für Owner, rx für Group/Other)
 chmod 755 "${INSTALL_DIR}/data"
 chmod 755 "${INSTALL_DIR}/logs"
 
 # Fuer Docker: Verzeichnisse muessen vom Container beschreibbar sein
-# Option 1: Wenn Container als root laeuft (Standard) - 755 reicht
-# Option 2: Wenn Container als non-root laeuft - 777 oder chown noetig
+# Option 1: Wenn Container als root läuft (Standard) - 755 reicht
+# Option 2: Wenn Container als non-root läuft - 777 oder chown nötig
 
-# Pruefen ob wir als root laufen (fuer chown)
+# Pruefen ob wir als root laufen (für chown)
 if [ "$(id -u)" = "0" ]; then
     # Als root: Owner auf aktuellen User setzen (oder Docker-User)
     # Standard: belassen wie es ist (root kann alles)
@@ -299,8 +299,8 @@ if [ "$(id -u)" = "0" ]; then
     echo -e "  logs/:  ${GREEN}OK${NC} (755, root)"
 else
     # Als normaler User: Verzeichnisse muessen beschreibbar sein
-    # Docker-Container laeuft meist als root, daher 755 ausreichend
-    # Falls Container als non-root laeuft, auf 777 setzen:
+    # Docker-Container läuft meist als root, daher 755 ausreichend
+    # Falls Container als non-root läuft, auf 777 setzen:
     # chmod 777 "${INSTALL_DIR}/data" "${INSTALL_DIR}/logs"
     echo -e "  data/:  ${GREEN}OK${NC} (755)"
     echo -e "  logs/:  ${GREEN}OK${NC} (755)"
@@ -318,11 +318,11 @@ if [ -f "${INSTALL_DIR}/install.sh" ]; then
 fi
 
 # ============================================================
-# 5. Docker-Netzwerk pruefen/erstellen
+# 5. Docker-Netzwerk prüfen/erstellen
 # ============================================================
 echo ""
 NETWORK="${TRAEFIK_NETWORK:-web}"
-echo "Pruefe Docker-Netzwerk: ${NETWORK}"
+echo "Prüfe Docker-Netzwerk: ${NETWORK}"
 
 if docker network inspect "${NETWORK}" >/dev/null 2>&1; then
     echo -e "  Netzwerk '${NETWORK}': ${GREEN}existiert${NC}"
@@ -330,7 +330,7 @@ else
     echo -e "${RED}Fehler: Docker-Netzwerk '${NETWORK}' existiert nicht!${NC}"
     echo ""
     echo "Das Netzwerk muss von Traefik erstellt werden oder bereits existieren."
-    echo "Stelle sicher, dass Traefik laeuft und das Netzwerk '${NETWORK}' verwendet."
+    echo "Stelle sicher, dass Traefik läuft und das Netzwerk '${NETWORK}' verwendet."
     echo ""
     echo "Optionen:"
     echo "  1. Starte Traefik zuerst (empfohlen)"
@@ -342,10 +342,10 @@ else
 fi
 
 # ============================================================
-# 6. Pruefe ob Traefik laeuft
+# 6. Prüfe ob Traefik läuft
 # ============================================================
 echo ""
-echo "Pruefe Traefik..."
+echo "Prüfe Traefik..."
 
 # Suche nach laufenden Traefik-Containern
 TRAEFIK_CONTAINER=$(docker ps --filter "name=traefik" --filter "status=running" --format "{{.Names}}" 2>/dev/null | head -1)
@@ -366,13 +366,13 @@ if [ -z "$TRAEFIK_CONTAINER" ]; then
 fi
 
 if [ -n "$TRAEFIK_CONTAINER" ]; then
-    # Pruefe Traefik-Version (BusyBox-kompatibel)
+    # Prüfe Traefik-Version (BusyBox-kompatibel)
     TRAEFIK_VERSION=$(docker exec "$TRAEFIK_CONTAINER" traefik version 2>/dev/null | \
         grep -i "version" | head -1 | sed 's/.*Version[: ]*\([0-9.]*\).*/\1/' || echo "unbekannt")
     [ -z "$TRAEFIK_VERSION" ] && TRAEFIK_VERSION="unbekannt"
-    echo -e "  Traefik:        ${GREEN}laeuft${NC} (Container: ${TRAEFIK_CONTAINER}, v${TRAEFIK_VERSION})"
+    echo -e "  Traefik:        ${GREEN}läuft${NC} (Container: ${TRAEFIK_CONTAINER}, v${TRAEFIK_VERSION})"
 
-    # Pruefe ob Traefik am gleichen Netzwerk haengt
+    # Prüfe ob Traefik am gleichen Netzwerk haengt
     TRAEFIK_NETWORKS=$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null)
     if echo "$TRAEFIK_NETWORKS" | grep -q "$NETWORK"; then
         echo -e "  Traefik-Netzwerk: ${GREEN}OK${NC} (verbunden mit '${NETWORK}')"
@@ -384,7 +384,7 @@ if [ -n "$TRAEFIK_CONTAINER" ]; then
 else
     echo -e "  ${YELLOW}Warnung: Kein laufender Traefik-Container gefunden!${NC}"
     echo ""
-    echo "  Traefik wird fuer das Routing der User-Container benoetigt."
+    echo "  Traefik wird für das Routing der User-Container benötigt."
     echo "  Der Spawner kann ohne Traefik gestartet werden, aber:"
     echo "    - User-Container sind nur lokal erreichbar"
     echo "    - Kein automatisches HTTPS"
@@ -688,7 +688,7 @@ echo ""
 echo "Warte auf Spawner-Start..."
 sleep 5
 
-# Health-Check fuer API
+# Health-Check für API
 SPAWNER_URL="http://localhost:${SPAWNER_PORT:-5000}/health"
 if curl -sf "${SPAWNER_URL}" >/dev/null 2>&1; then
     echo -e "  API Health-Check:      ${GREEN}OK${NC}"
@@ -696,7 +696,7 @@ else
     echo -e "  API Health-Check:      ${YELLOW}Noch nicht bereit (normal beim ersten Start)${NC}"
 fi
 
-# Health-Check fuer Frontend
+# Health-Check für Frontend
 if curl -sf "http://localhost:3000/" >/dev/null 2>&1; then
     echo -e "  Frontend Health-Check: ${GREEN}OK${NC}"
 else

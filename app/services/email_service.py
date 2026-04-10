@@ -1,6 +1,4 @@
-"""
-Email service for verification emails and magic links
-"""
+"""E-Mail-Service für Verifizierungs-E-Mails und Magic-Links."""
 import smtplib
 import secrets
 import hashlib
@@ -11,15 +9,12 @@ from datetime import datetime, timedelta
 
 
 def generate_verification_token():
-    """Generate a secure verification token"""
+    """Erzeugt einen sicheren Verifizierungs-Token."""
     return secrets.token_urlsafe(32)
 
 
 def generate_slug_from_email(email: str) -> str:
-    """
-    Generate unique slug from email.
-    Format: First 12 characters of SHA256(email)
-    """
+    """Erzeugt einen eindeutigen Slug aus der E-Mail (erste 12 Zeichen von SHA256)."""
     email_lower = email.lower().strip()
     hash_obj = hashlib.sha256(email_lower.encode())
     slug = hash_obj.hexdigest()[:12]
@@ -27,21 +22,12 @@ def generate_slug_from_email(email: str) -> str:
 
 
 def generate_magic_link_token() -> str:
-    """
-    Generate secure token for magic links.
-    32 bytes = ~43 characters URL-safe Base64
-    """
+    """Erzeugt einen sicheren Token für Magic-Links (32 Bytes URL-safe Base64)."""
     return secrets.token_urlsafe(32)
 
 
 def check_rate_limit(email: str) -> bool:
-    """
-    Check if user has requested too many magic links.
-    Max 3 tokens per email in the last 60 minutes.
-
-    Returns:
-        True if OK, False if rate limit reached
-    """
+    """Prüft ob das Rate-Limit erreicht ist (max. 3 Tokens pro Stunde). True = OK."""
     from app.models import User, MagicLinkToken
 
     user = User.query.filter_by(email=email).first()
@@ -58,17 +44,7 @@ def check_rate_limit(email: str) -> bool:
 
 
 def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
-    """
-    Send magic link email.
-
-    Args:
-        email: Recipient email
-        token: Magic link token
-        token_type: 'signup' or 'login'
-
-    Returns:
-        True on success, False on error
-    """
+    """Sendet eine Magic-Link-E-Mail (signup oder login). True bei Erfolg."""
     # In local dev mode, use localhost:3000 for the frontend URL
     frontend_url = Config.FRONTEND_URL
     if Config.BASE_DOMAIN == 'localhost':

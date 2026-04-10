@@ -15,7 +15,7 @@ import os
 
 
 def create_app():
-    """Flask application factory"""
+    """Flask-Application-Factory: Erstellt und konfiguriert die App."""
     app = Flask(__name__)
     app.config.from_object(Config)
 
@@ -110,7 +110,7 @@ def create_app():
     # Health check route
     @app.route('/health')
     def health():
-        """Health check for Docker and monitoring"""
+        """Health-Check für Docker und Monitoring."""
         db_status = 'ok'
         docker_status = 'warning'
 

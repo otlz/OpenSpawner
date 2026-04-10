@@ -1,28 +1,18 @@
 """
-Decorators for access control
+Dekoratoren für Zugriffskontrolle.
+Müssen immer NACH @jwt_required() verwendet werden.
 """
 from functools import wraps
 from flask import jsonify
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from app.models import User
 
 
 def admin_required():
-    """
-    Decorator that checks for admin privileges.
-    Must be used AFTER @jwt_required().
-
-    Usage:
-        @api_bp.route('/admin/users')
-        @jwt_required()
-        @admin_required()
-        def get_users():
-            ...
-    """
+    """Prüft ob der Benutzer Admin-Rechte hat. Muss nach @jwt_required() stehen."""
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            verify_jwt_in_request()
             user_id = get_jwt_identity()
             user = User.query.get(int(user_id))
 
@@ -38,23 +28,12 @@ def admin_required():
 
 
 def verified_required():
-    """
-    Decorator that checks if email is verified.
-    Must be used AFTER @jwt_required().
-
-    Usage:
-        @api_bp.route('/container/action')
-        @jwt_required()
-        @verified_required()
-        def container_action():
-            ...
-    """
+    """Prüft ob die E-Mail-Adresse verifiziert ist. Muss nach @jwt_required() stehen."""
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             from app.models import UserState
 
-            verify_jwt_in_request()
             user_id = get_jwt_identity()
             user = User.query.get(int(user_id))
 

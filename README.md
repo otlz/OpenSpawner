@@ -1,13 +1,13 @@
 # OpenSpawner
 
-Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutzer bereitstellt. Jeder Benutzer bekommt eigene Container mit personalisierter URL, verwaltet ueber ein Web-Dashboard.
+Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutzer bereitstellt. Jeder Benutzer bekommt eigene Container mit personalisierter URL, verwaltet über ein Web-Dashboard.
 
 ## Was macht OpenSpawner?
 
-- Benutzer registrieren sich per Magic Link (passwortlos, kein Passwort noetig)
+- Benutzer registrieren sich per Magic Link (passwortlos, kein Passwort nötig)
 - Jeder Benutzer kann Docker-Container aus fertigen Templates starten
 - Container sind automatisch per Web erreichbar
-- Admins verwalten Benutzer und Container ueber ein Dashboard
+- Admins verwalten Benutzer und Container über ein Dashboard
 
 ## Schnellstart (Docker Desktop)
 
@@ -21,7 +21,7 @@ docker compose --profile build build   # Template-Images bauen
 docker compose up --build              # Anwendung starten
 ```
 
-Dann oeffnen: [http://localhost:3000](http://localhost:3000)
+Dann öffnen: [http://localhost:3000](http://localhost:3000)
 
 > **Wichtig:** Der erste registrierte Benutzer wird automatisch Admin.
 
@@ -63,7 +63,7 @@ Alle Einstellungen in `.env` (Vorlage: `.env.example`). Die wichtigsten:
 
 | Variable | Standard | Beschreibung |
 |----------|----------|-------------|
-| `SECRET_KEY` | `dev-secret-...` | Flask Secret Key (in Produktion aendern!) |
+| `SECRET_KEY` | `dev-secret-...` | Flask Secret Key (in Produktion ändern!) |
 | `BASE_DOMAIN` | `localhost` | Domain |
 | `TRAEFIK_ENABLED` | `false` | Traefik Reverse Proxy aktivieren |
 | `USER_TEMPLATE_IMAGES` | alle Templates | Semikolon-getrennte Liste der Templates |
@@ -82,18 +82,18 @@ OpenSpawner kommt mit fertigen Container-Templates:
 | `user-template-02` | Nginx Advanced |
 | `user-template-next` | Next.js React-Anwendung |
 | `user-template-dictionary` | Python Flask Dictionary App |
-| `user-template-vcoder` | Web IDE mit PlatformIO fuer ESP8266 |
+| `user-template-vcoder` | Web IDE mit PlatformIO für ESP8266 |
 
 ### Eigenes Template erstellen
 
 1. Verzeichnis `templates/user-template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
-2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufuegen
+2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufügen
 3. Metadaten in `templates.json` eintragen
 4. Bauen: `docker compose --profile build build`
 
 ## Produktion (mit Traefik)
 
-Fuer Produktion mit HTTPS und Domain-Routing:
+Für Produktion mit HTTPS und Domain-Routing:
 
 ```bash
 # In .env anpassen:
@@ -113,12 +113,12 @@ Voraussetzung: Ein laufender [Traefik](https://traefik.io/) Reverse Proxy mit Do
 
 ## API-Dokumentation
 
-Swagger UI ist verfuegbar unter [http://localhost:5000/swagger](http://localhost:5000/swagger).
+Swagger UI ist verfügbar unter [http://localhost:5000/swagger](http://localhost:5000/swagger).
 
 ## Autoren
 
-- **Rainer Wieland** — Karl Kuebel Schule Bensheim
-- **Navin Dass** — Karl Kuebel Schule Bensheim
+- **Rainer Wieland** — Karl Kübel Schule Bensheim
+- **Navin Dass** — Karl Kübel Schule Bensheim
 
 ## Lizenz
 

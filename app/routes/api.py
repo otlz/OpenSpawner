@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, request, current_app, redirect, make_response
+"""
+API-Blueprint für Authentifizierung, Benutzer- und Container-Verwaltung.
+"""
+from flask import Blueprint, jsonify, request, current_app, make_response
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
@@ -19,9 +22,16 @@ import re
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+# Token-Blacklist für Logout (In-Memory, reicht für Single-Instance)
+token_blacklist = set()
+
+
+# ============================================================
+# Hilfsfunktionen
+# ============================================================
 
 def _get_service_url(slug_or_path, container_port=None):
-    """Generate service URL based on mode (Traefik vs local port mapping)"""
+    """Erstellt die Service-URL je nach Modus (Traefik vs. lokaler Port)."""
     if Config.TRAEFIK_ENABLED:
         scheme = Config.PREFERRED_URL_SCHEME
         domain = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
@@ -31,12 +41,69 @@ def _get_service_url(slug_or_path, container_port=None):
             return f"http://localhost:{container_port}"
         return None
 
-# Token blacklist for logout
-token_blacklist = set()
+
+def _get_default_template():
+    """Gibt den ersten Template-Typ aus der Konfiguration zurück."""
+    return list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
 
 
-def create_auth_response(access_token, user_data, expires_in):
-    """Create a JSON response with JWT token as HttpOnly cookie"""
+def _ensure_user_has_container(user):
+    """
+    Stellt sicher, dass der Benutzer einen laufenden Primär-Container hat.
+    Erstellt oder startet den Container bei Bedarf neu.
+    Gibt (container_id, port) zurück oder (None, None) bei Fehler.
+    """
+    container_mgr = ContainerManager()
+    default_template = _get_default_template()
+
+    if user.container_id:
+        # Container existiert — Status prüfen und ggf. neu starten
+        try:
+            status = container_mgr.get_container_status(user.container_id)
+            if status != 'running':
+                container_mgr.start_container(user.container_id)
+                current_app.logger.info(f"[SPAWNER] Container {user.container_id[:12]} restarted for user {user.email}")
+            return user.container_id, user.container_port
+        except Exception as e:
+            # Container existiert nicht mehr — neuen erstellen
+            current_app.logger.warning(f"Container {user.container_id[:12]} not found, creating new one: {str(e)}")
+
+    # Kein Container vorhanden oder alter nicht mehr verfügbar — neuen erstellen
+    try:
+        container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
+        if user.containers:
+            user.containers[0].container_id = container_id
+            user.containers[0].container_port = port
+        current_app.logger.info(f"[SPAWNER] Container {default_template} created for user {user.id} (slug: {user.slug})")
+        return container_id, port
+    except Exception as e:
+        current_app.logger.error(f"Container spawn failed: {str(e)}")
+        return None, None
+
+
+def _create_jwt_response(user):
+    """Erstellt JWT-Token und Auth-Response mit HttpOnly-Cookie für den Benutzer."""
+    expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
+    access_token = create_access_token(
+        identity=str(user.id),
+        expires_delta=expires,
+        additional_claims={'is_admin': user.is_admin}
+    )
+
+    user_data = {
+        'id': user.id,
+        'email': user.email,
+        'slug': user.slug,
+        'is_admin': user.is_admin,
+        'state': user.state,
+        'container_id': user.container_id
+    }
+
+    return _create_auth_response(access_token, user_data, int(expires.total_seconds()))
+
+
+def _create_auth_response(access_token, user_data, expires_in):
+    """Erstellt eine JSON-Response mit JWT als HttpOnly-Cookie."""
     response_data = {
         'access_token': access_token,
         'token_type': 'Bearer',
@@ -46,20 +113,16 @@ def create_auth_response(access_token, user_data, expires_in):
 
     response = make_response(jsonify(response_data))
 
-    # Set JWT as HttpOnly cookie
-    # HttpOnly prevents JavaScript access
-    # Secure: only via HTTPS
-    # SameSite: CSRF protection
-    # Domain: available for all subpaths and subdomains
+    # HttpOnly: kein JS-Zugriff, Secure: nur HTTPS, SameSite: CSRF-Schutz
     response.set_cookie(
         'spawner_token',
         access_token,
         max_age=expires_in,
         httponly=True,
-        secure=True,  # Only via HTTPS
-        samesite='Lax',  # CSRF protection
-        path='/',  # Available for all paths
-        domain=f".{Config.BASE_DOMAIN}"  # Available for all subpaths and subdomains
+        secure=True,
+        samesite='Lax',
+        path='/',
+        domain=f".{Config.BASE_DOMAIN}"
     )
 
     return response
@@ -67,7 +130,7 @@ def create_auth_response(access_token, user_data, expires_in):
 
 @api_bp.route('/auth/login', methods=['POST'])
 def api_login():
-    """API login with magic link (passwordless)"""
+    """Login per Magic-Link (passwortlos). Sendet E-Mail mit Login-Link."""
     data = request.get_json()
 
     if not data:
@@ -124,7 +187,7 @@ def api_login():
 
 @api_bp.route('/auth/signup', methods=['POST'])
 def api_signup():
-    """API signup with magic link (passwordless)"""
+    """Registrierung per Magic-Link. Erstellt Benutzer und sendet Verifizierungs-Link."""
     data = request.get_json()
 
     if not data:
@@ -235,177 +298,78 @@ def api_signup():
 
 @api_bp.route('/auth/verify-signup', methods=['GET'])
 def api_verify_signup():
-    """Verify signup magic link and create JWT"""
+    """Verifiziert den Signup-Magic-Link und erstellt JWT."""
     token = request.args.get('token')
 
     if not token:
         return jsonify({'error': 'Token is missing'}), 400
 
-    # Find token in database
-    magic_token = MagicLinkToken.query.filter_by(
-        token=token,
-        token_type='signup'
-    ).first()
+    magic_token = MagicLinkToken.query.filter_by(token=token, token_type='signup').first()
 
     if not magic_token:
         return jsonify({'error': 'Invalid or expired link'}), 400
 
-    # Check validity
     if not magic_token.is_valid():
         return jsonify({'error': 'This link has expired or has already been used'}), 400
 
-    # Get user
     user = magic_token.user
 
-    # Set user status to VERIFIED
+    # Status auf VERIFIED setzen und Token entwerten
     user.state = UserState.VERIFIED.value
     magic_token.mark_as_used()
     db.session.commit()
 
-    # Spawn container (only on first signup) - multi-container compatible
+    # Container erstellen (nur beim ersten Signup, optional)
     if not user.container_id:
-        try:
-            container_mgr = ContainerManager()
-            # Use spawn_multi_container with default template (template-01)
-            default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
-            container_id, port = container_mgr.spawn_multi_container(
-                user.id,
-                user.slug,
-                default_template
-            )
-            # Save in primary container (backwards compatibility)
-            if user.containers:
-                user.containers[0].container_id = container_id
-                user.containers[0].container_port = port
-            db.session.commit()
-            current_app.logger.info(f"[SPAWNER] Container {default_template} created for user {user.id} (slug: {user.slug})")
-        except Exception as e:
-            current_app.logger.error(f"Container spawn failed: {str(e)}")
-            # Note: container spawn is optional during signup
-            # User is still created, container can be created manually later
-
-    # Create JWT
-    expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
-    access_token = create_access_token(
-        identity=str(user.id),
-        expires_delta=expires,
-        additional_claims={'is_admin': user.is_admin}
-    )
+        _ensure_user_has_container(user)
+        db.session.commit()
 
     current_app.logger.info(f"[SIGNUP] User {user.email} successfully registered")
 
-    user_data = {
-        'id': user.id,
-        'email': user.email,
-        'slug': user.slug,
-        'is_admin': user.is_admin,
-        'state': user.state,
-        'container_id': user.container_id
-    }
-
-    return create_auth_response(access_token, user_data, int(expires.total_seconds())), 200
+    return _create_jwt_response(user), 200
 
 
 @api_bp.route('/auth/verify-login', methods=['GET'])
 def api_verify_login():
-    """Verify login magic link and create JWT"""
+    """Verifiziert den Login-Magic-Link und erstellt JWT."""
     token = request.args.get('token')
 
     if not token:
         return jsonify({'error': 'Token is missing'}), 400
 
-    # Find token
-    magic_token = MagicLinkToken.query.filter_by(
-        token=token,
-        token_type='login'
-    ).first()
+    magic_token = MagicLinkToken.query.filter_by(token=token, token_type='login').first()
 
     if not magic_token:
         return jsonify({'error': 'Invalid or expired link'}), 400
 
-    # Check validity
     if not magic_token.is_valid():
         return jsonify({'error': 'This link has expired or has already been used'}), 400
 
-    # Get user
     user = magic_token.user
 
-    # Check if user is blocked
     if user.is_blocked:
         return jsonify({'error': 'Your account has been suspended'}), 403
 
-    # Check if email is verified
     if user.state == UserState.REGISTERED.value:
         return jsonify({'error': 'Please verify your email address first'}), 403
 
-    # Mark token as used
     magic_token.mark_as_used()
 
-    # Container management - start or recreate
-    container_mgr = ContainerManager()
-
-    if user.container_id:
-        try:
-            status = container_mgr.get_container_status(user.container_id)
-            if status != 'running':
-                # Restart container
-                container_mgr.start_container(user.container_id)
-                current_app.logger.info(f"[LOGIN] Container {user.container_id[:12]} restarted for user {user.email}")
-        except Exception as e:
-            # Container no longer exists - create new one
-            current_app.logger.warning(f"Container {user.container_id[:12]} not found, creating new one: {str(e)}")
-            try:
-                # Use spawn_multi_container for primary container
-                default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
-                container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
-                if user.containers:
-                    user.containers[0].container_id = container_id
-                    user.containers[0].container_port = port
-                current_app.logger.info(f"[LOGIN] New container {default_template} created for user {user.email} (slug: {user.slug})")
-            except Exception as spawn_error:
-                current_app.logger.error(f"Container spawn failed: {str(spawn_error)}")
-    else:
-        # No container exists - create new one
-        try:
-            # Use spawn_multi_container for primary container
-            default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
-            container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
-            if user.containers:
-                user.containers[0].container_id = container_id
-                user.containers[0].container_port = port
-            current_app.logger.info(f"[LOGIN] Container created for user {user.email} (slug: {user.slug})")
-        except Exception as e:
-            current_app.logger.error(f"Container spawn failed: {str(e)}")
+    # Container sicherstellen (starten oder neu erstellen)
+    _ensure_user_has_container(user)
 
     user.last_used = datetime.utcnow()
     db.session.commit()
 
-    # Create JWT
-    expires = timedelta(seconds=current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
-    access_token = create_access_token(
-        identity=str(user.id),
-        expires_delta=expires,
-        additional_claims={'is_admin': user.is_admin}
-    )
-
     current_app.logger.info(f"[LOGIN] User {user.email} successfully logged in")
 
-    user_data = {
-        'id': user.id,
-        'email': user.email,
-        'slug': user.slug,
-        'is_admin': user.is_admin,
-        'state': user.state,
-        'container_id': user.container_id
-    }
-
-    return create_auth_response(access_token, user_data, int(expires.total_seconds())), 200
+    return _create_jwt_response(user), 200
 
 
 @api_bp.route('/auth/logout', methods=['POST'])
 @jwt_required()
 def api_logout():
-    """API logout - invalidate token and delete cookie"""
+    """Logout — Token invalidieren und Cookie löschen."""
     jti = get_jwt()['jti']
     token_blacklist.add(jti)
 
@@ -419,7 +383,7 @@ def api_logout():
 @api_bp.route('/user/me', methods=['GET'])
 @jwt_required()
 def api_user_me():
-    """Return current user and container info"""
+    """Gibt aktuelle Benutzer- und Container-Informationen zurück."""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 
@@ -460,7 +424,7 @@ def api_user_me():
 @api_bp.route('/container/status', methods=['GET'])
 @jwt_required()
 def api_container_status():
-    """Return container status"""
+    """Gibt den Container-Status des Benutzers zurück."""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 
@@ -484,53 +448,43 @@ def api_container_status():
 @api_bp.route('/container/restart', methods=['POST'])
 @jwt_required()
 def api_container_restart():
-    """Restart container"""
+    """Startet den Primär-Container des Benutzers neu (stop + remove + spawn)."""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    container_mgr = ContainerManager()
-
-    # Stop old container if it exists
+    # Alten Container stoppen und entfernen
     if user.container_id:
+        container_mgr = ContainerManager()
         try:
             container_mgr.stop_container(user.container_id)
             container_mgr.remove_container(user.container_id)
         except Exception as e:
             current_app.logger.warning(f"Old container could not be stopped: {str(e)}")
 
-    # Start new container - multi-container compatible
-    try:
-        # Use spawn_multi_container for primary container
-        default_template = list(current_app.config['CONTAINER_TEMPLATES'].keys())[0]
-        container_id, port = container_mgr.spawn_multi_container(user.id, user.slug, default_template)
-        if user.containers:
-            user.containers[0].container_id = container_id
-            user.containers[0].container_port = port
+    # Neuen Container erstellen
+    container_id, port = _ensure_user_has_container(user)
+    if not container_id:
+        return jsonify({'error': 'Container restart failed'}), 500
 
-        # Set state to ACTIVE on container start (if still VERIFIED)
-        if user.state == UserState.VERIFIED.value:
-            user.state = UserState.ACTIVE.value
+    # Status auf ACTIVE setzen (falls noch VERIFIED)
+    if user.state == UserState.VERIFIED.value:
+        user.state = UserState.ACTIVE.value
 
-        # Update last_used
-        user.last_used = datetime.utcnow()
-        db.session.commit()
+    user.last_used = datetime.utcnow()
+    db.session.commit()
 
-        return jsonify({
-            'message': 'Container successfully restarted',
-            'container_id': container_id,
-            'status': 'running'
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Container restart failed: {str(e)}")
-        return jsonify({'error': f'Container restart failed: {str(e)}'}), 500
+    return jsonify({
+        'message': 'Container successfully restarted',
+        'container_id': container_id,
+        'status': 'running'
+    }), 200
 
 
 def check_if_token_revoked(jwt_header, jwt_payload):
-    """Callback for flask-jwt-extended to check revoked tokens"""
+    """Callback für flask-jwt-extended: Prüft ob ein Token widerrufen wurde."""
     jti = jwt_payload['jti']
     return jti in token_blacklist
 
@@ -542,7 +496,7 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 @api_bp.route('/user/containers', methods=['GET'])
 @jwt_required()
 def api_user_containers():
-    """Return all containers for the user"""
+    """Gibt alle Container des Benutzers zurück (Multi-Container-Unterstützung)."""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 
@@ -592,7 +546,7 @@ def api_user_containers():
 @api_bp.route('/container/launch/<container_type>', methods=['POST'])
 @jwt_required()
 def api_container_launch(container_type):
-    """Create container on-demand and return service URL"""
+    """Erstellt einen Container on-demand und gibt die Service-URL zurück."""
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
 

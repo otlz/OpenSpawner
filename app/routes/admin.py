@@ -1,6 +1,6 @@
 """
-Admin API Blueprint
-All endpoints require admin privileges.
+Admin-API-Blueprint.
+Alle Endpunkte erfordern Admin-Rechte (außer /debug mit Debug-Token).
 """
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -17,7 +17,7 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 @jwt_required()
 @admin_required()
 def get_users():
-    """List all users (with container info for Phase 7)"""
+    """Listet alle Benutzer mit Container-Informationen auf."""
     users = User.query.all()
 
     users_list = []
@@ -38,7 +38,7 @@ def get_users():
 @jwt_required()
 @admin_required()
 def get_user(user_id):
-    """Return details for a single user"""
+    """Gibt Details eines einzelnen Benutzers zurück."""
     user = User.query.get(user_id)
 
     if not user:
@@ -63,7 +63,7 @@ def get_user(user_id):
 @jwt_required()
 @admin_required()
 def block_user(user_id):
-    """Block a user and all their containers (cascading - Phase 7)"""
+    """Sperrt einen Benutzer und alle seine Container (kaskadierend)."""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
@@ -116,7 +116,7 @@ def block_user(user_id):
 @jwt_required()
 @admin_required()
 def unblock_user(user_id):
-    """Unblock a user (user-level block)"""
+    """Entsperrt einen Benutzer (Container-Sperren bleiben bestehen)."""
     user = User.query.get(user_id)
 
     if not user:
@@ -151,7 +151,7 @@ def unblock_user(user_id):
 @jwt_required()
 @admin_required()
 def resend_user_verification(user_id):
-    """Resend magic link to a user (admin function)"""
+    """Sendet einen Magic-Link erneut an einen Benutzer (Admin-Funktion)."""
     from app.services.email_service import generate_magic_link_token, send_magic_link_email
 
     user = User.query.get(user_id)
@@ -189,7 +189,7 @@ def resend_user_verification(user_id):
 @jwt_required()
 @admin_required()
 def delete_user_container(user_id):
-    """Delete specific containers of a user (multi-container support)"""
+    """Löscht bestimmte Container eines Benutzers (Multi-Container)."""
     admin_id = get_jwt_identity()
     user = User.query.get(user_id)
 
@@ -260,7 +260,7 @@ def delete_user_container(user_id):
 @jwt_required()
 @admin_required()
 def delete_user(user_id):
-    """Delete a user completely (GDPR compliant)"""
+    """Löscht einen Benutzer vollständig (DSGVO-konform)."""
     admin_id = get_jwt_identity()
 
     if int(admin_id) == user_id:
@@ -331,10 +331,7 @@ def delete_user(user_id):
 @jwt_required()
 @admin_required()
 def start_takeover(user_id):
-    """
-    Start a takeover session for a user container.
-    DUMMY IMPLEMENTATION - will be fully implemented in Phase 2.
-    """
+    """Startet eine Takeover-Session für einen Benutzer-Container (Dummy)."""
     admin_id = get_jwt_identity()
     data = request.get_json() or {}
     reason = data.get('reason', '')
@@ -370,10 +367,7 @@ def start_takeover(user_id):
 @jwt_required()
 @admin_required()
 def end_takeover(session_id):
-    """
-    End a takeover session.
-    DUMMY IMPLEMENTATION - will be fully implemented in Phase 2.
-    """
+    """Beendet eine Takeover-Session (Dummy)."""
     session = AdminTakeoverSession.query.get(session_id)
 
     if not session:
@@ -398,7 +392,7 @@ def end_takeover(session_id):
 @jwt_required()
 @admin_required()
 def get_active_takeovers():
-    """List all active takeover sessions"""
+    """Listet alle aktiven Takeover-Sessions auf."""
     sessions = AdminTakeoverSession.query.filter_by(ended_at=None).all()
 
     sessions_list = []
@@ -419,77 +413,12 @@ def get_active_takeovers():
     }), 200
 
 
-@admin_bp.route('/debug', methods=['GET', 'POST'])
-def debug_management():
-    """
-    Debug management endpoint for logs and database cleanup
-    ---
-    tags:
-      - Debug
-    parameters:
-      - name: action
-        in: query
-        type: string
-        required: true
-        enum:
-          - view-logs
-          - clear-logs
-          - list-users
-          - delete-email
-          - delete-token
-          - info
-        description: Which action to perform?
-      - name: email
-        in: query
-        type: string
-        required: false
-        description: User email address (required for delete-email and delete-token)
-      - name: X-Debug-Token
-        in: header
-        type: string
-        required: false
-        description: Debug token as alternative to JWT authentication
-    security:
-      - jwt: []
-      - debug_token: []
-    responses:
-      200:
-        description: Successfully executed
-        schema:
-          type: object
-          properties:
-            action:
-              type: string
-              description: The executed action
-            message:
-              type: string
-              description: Response message
-            logs:
-              type: string
-              description: Log contents (only for view-logs)
-            users:
-              type: array
-              description: List of users (only for list-users)
-            tokens_deleted:
-              type: integer
-              description: Number of deleted tokens
-      400:
-        description: Invalid parameters
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-      403:
-        description: Authentication required
-      404:
-        description: User or resource not found
-    """
-    # Check authentication
+def _check_debug_auth():
+    """Prüft Authentifizierung für Debug-Endpunkt (JWT oder Debug-Token)."""
     debug_token = current_app.config.get('DEBUG_TOKEN')
     provided_token = request.headers.get('X-Debug-Token')
 
-    # Try JWT auth
+    # JWT-Auth versuchen
     is_admin = False
     try:
         from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
@@ -498,161 +427,187 @@ def debug_management():
         if user_id:
             user = User.query.get(int(user_id))
             is_admin = user and user.is_admin
-    except:
+    except Exception:
         pass
 
-    # Validate authentication
-    if not (is_admin or (debug_token and provided_token == debug_token)):
+    return is_admin or (debug_token and provided_token == debug_token)
+
+
+def _debug_view_logs():
+    """Zeigt die letzten 100 Zeilen der Log-Datei."""
+    log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
+    try:
+        with open(log_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            last_100 = lines[-100:] if len(lines) > 100 else lines
+        return jsonify({
+            'action': 'view-logs',
+            'source': 'Flask Log File',
+            'total_lines': len(lines),
+            'displayed_lines': len(last_100),
+            'logs': ''.join(last_100)
+        }), 200
+    except FileNotFoundError:
+        return jsonify({'error': f'Log file not found: {log_file}'}), 404
+    except Exception as e:
+        return jsonify({'error': f'Error reading logs: {str(e)}'}), 500
+
+
+def _debug_clear_logs():
+    """Leert die Log-Datei."""
+    log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
+    try:
+        with open(log_file, 'w') as f:
+            f.write('')
+        current_app.logger.info('[DEBUG] Logs cleared')
+        return jsonify({
+            'action': 'clear-logs',
+            'message': 'Log file cleared',
+            'log_file': log_file
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Error clearing logs: {str(e)}'}), 500
+
+
+def _debug_delete_email():
+    """Löscht einen Benutzer anhand der E-Mail-Adresse (inkl. Container)."""
+    email = request.args.get('email', '').strip()
+    if not email:
+        return jsonify({'error': 'Required parameter: email'}), 400
+
+    try:
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': f'User {email} not found'}), 404
+
+        user_id = user.id
+        email_deleted = user.email
+
+        # Container löschen falls vorhanden
+        if user.container_id:
+            try:
+                container_mgr = ContainerManager()
+                container_mgr.stop_container(user.container_id)
+                container_mgr.remove_container(user.container_id)
+            except Exception:
+                pass
+
+        db.session.delete(user)
+        db.session.commit()
+
+        current_app.logger.info(f'[DEBUG] User {email_deleted} deleted')
+
+        return jsonify({
+            'action': 'delete-email',
+            'message': f'User {email_deleted} deleted',
+            'user_id': user_id
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error deleting: {str(e)}'}), 500
+
+
+def _debug_delete_token():
+    """Löscht alle Magic-Link-Tokens eines Benutzers."""
+    email = request.args.get('email', '').strip()
+    if not email:
+        return jsonify({'error': 'Required parameter: email'}), 400
+
+    try:
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': f'User {email} not found'}), 404
+
+        tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
+        count = len(tokens)
+
+        for token in tokens:
+            db.session.delete(token)
+        db.session.commit()
+
+        current_app.logger.info(f'[DEBUG] {count} magic link tokens for {email} deleted')
+
+        return jsonify({
+            'action': 'delete-token',
+            'message': f'{count} tokens for {email} deleted',
+            'tokens_deleted': count
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
+
+def _debug_list_users():
+    """Listet alle registrierten Benutzer auf."""
+    users = User.query.all()
+    users_list = [{
+        'id': user.id,
+        'email': user.email,
+        'slug': user.slug,
+        'state': user.state,
+        'is_admin': user.is_admin,
+        'is_blocked': user.is_blocked,
+        'created_at': user.created_at.isoformat() if user.created_at else None,
+        'last_used': user.last_used.isoformat() if user.last_used else None
+    } for user in users]
+
+    return jsonify({
+        'action': 'list-users',
+        'users': users_list,
+        'total': len(users_list)
+    }), 200
+
+
+def _debug_info():
+    """Gibt Hilfe-Informationen zum Debug-Endpunkt zurück."""
+    return jsonify({
+        'endpoint': '/api/admin/debug',
+        'auth': 'X-Debug-Token header or admin JWT',
+        'actions': {
+            'view-logs': 'Show last 100 lines of logs',
+            'clear-logs': 'Clear all logs',
+            'list-users': 'List all registered users',
+            'delete-email': 'Delete user (parameter: email=...)',
+            'delete-token': 'Delete magic link tokens (parameter: email=...)',
+            'info': 'This help'
+        },
+        'examples': [
+            'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
+            'GET /api/admin/debug?action=list-users -H "X-Debug-Token: xxx"',
+            'GET /api/admin/debug?action=delete-email&email=test@example.com',
+            'GET /api/admin/debug?action=delete-token&email=test@example.com'
+        ]
+    }), 200
+
+
+# Dispatch-Tabelle für Debug-Actions
+_DEBUG_HANDLERS = {
+    'view-logs': _debug_view_logs,
+    'clear-logs': _debug_clear_logs,
+    'delete-email': _debug_delete_email,
+    'delete-token': _debug_delete_token,
+    'list-users': _debug_list_users,
+    'info': _debug_info,
+}
+
+
+@admin_bp.route('/debug', methods=['GET', 'POST'])
+def debug_management():
+    """Debug-Endpunkt für Logs und Datenbankbereinigung (Dispatch-Pattern)."""
+    if not _check_debug_auth():
         return jsonify({'error': 'Authentication required (JWT or X-Debug-Token header)'}), 403
 
     action = request.args.get('action', '').lower()
 
-    # ===== view-logs =====
-    if action == 'view-logs':
-        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
-        try:
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                last_100 = lines[-100:] if len(lines) > 100 else lines
-            return jsonify({
-                'action': 'view-logs',
-                'source': 'Flask Log File',
-                'total_lines': len(lines),
-                'displayed_lines': len(last_100),
-                'logs': ''.join(last_100)
-            }), 200
-        except FileNotFoundError:
-            return jsonify({'error': f'Log file not found: {log_file}'}), 404
-        except Exception as e:
-            return jsonify({'error': f'Error reading logs: {str(e)}'}), 500
+    # Kein Action angegeben → Info anzeigen
+    if not action:
+        return _debug_info()
 
-    # ===== clear-logs =====
-    elif action == 'clear-logs':
-        log_file = current_app.config.get('LOG_FILE', '/app/logs/spawner.log')
-        try:
-            with open(log_file, 'w') as f:
-                f.write('')
-            current_app.logger.info('[DEBUG] Logs cleared')
-            return jsonify({
-                'action': 'clear-logs',
-                'message': 'Log file cleared',
-                'log_file': log_file
-            }), 200
-        except Exception as e:
-            return jsonify({'error': f'Error clearing logs: {str(e)}'}), 500
-
-    # ===== delete-email =====
-    elif action == 'delete-email':
-        email = request.args.get('email', '').strip()
-        if not email:
-            return jsonify({'error': 'Required parameter: email'}), 400
-
-        try:
-            user = User.query.filter_by(email=email).first()
-            if not user:
-                return jsonify({'error': f'User {email} not found'}), 404
-
-            user_id = user.id
-            email_deleted = user.email
-
-            # Delete container if present
-            if user.container_id:
-                try:
-                    container_mgr = ContainerManager()
-                    container_mgr.stop_container(user.container_id)
-                    container_mgr.remove_container(user.container_id)
-                except:
-                    pass
-
-            # Delete user and all associated data
-            db.session.delete(user)
-            db.session.commit()
-
-            current_app.logger.info(f'[DEBUG] User {email_deleted} deleted')
-
-            return jsonify({
-                'action': 'delete-email',
-                'message': f'User {email_deleted} deleted',
-                'user_id': user_id
-            }), 200
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'error': f'Error deleting: {str(e)}'}), 500
-
-    # ===== delete-token =====
-    elif action == 'delete-token':
-        email = request.args.get('email', '').strip()
-        if not email:
-            return jsonify({'error': 'Required parameter: email'}), 400
-
-        try:
-            user = User.query.filter_by(email=email).first()
-            if not user:
-                return jsonify({'error': f'User {email} not found'}), 404
-
-            tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
-            count = len(tokens)
-
-            for token in tokens:
-                db.session.delete(token)
-            db.session.commit()
-
-            current_app.logger.info(f'[DEBUG] {count} magic link tokens for {email} deleted')
-
-            return jsonify({
-                'action': 'delete-token',
-                'message': f'{count} tokens for {email} deleted',
-                'tokens_deleted': count
-            }), 200
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'error': f'Error: {str(e)}'}), 500
-
-    # ===== list-users =====
-    elif action == 'list-users':
-        users = User.query.all()
-        users_list = []
-        for user in users:
-            users_list.append({
-                'id': user.id,
-                'email': user.email,
-                'slug': user.slug,
-                'state': user.state,
-                'is_admin': user.is_admin,
-                'is_blocked': user.is_blocked,
-                'created_at': user.created_at.isoformat() if user.created_at else None,
-                'last_used': user.last_used.isoformat() if user.last_used else None
-            })
-
-        return jsonify({
-            'action': 'list-users',
-            'users': users_list,
-            'total': len(users_list)
-        }), 200
-
-    # ===== info =====
-    elif action == 'info' or not action:
-        return jsonify({
-            'endpoint': '/api/admin/debug',
-            'auth': 'X-Debug-Token header or admin JWT',
-            'actions': {
-                'view-logs': 'Show last 100 lines of logs',
-                'clear-logs': 'Clear all logs',
-                'list-users': 'List all registered users',
-                'delete-email': 'Delete user (parameter: email=...)',
-                'delete-token': 'Delete magic link tokens (parameter: email=...)',
-                'info': 'This help'
-            },
-            'examples': [
-                'GET /api/admin/debug?action=view-logs -H "X-Debug-Token: xxx"',
-                'GET /api/admin/debug?action=list-users -H "X-Debug-Token: xxx"',
-                'GET /api/admin/debug?action=delete-email&email=test@example.com',
-                'GET /api/admin/debug?action=delete-token&email=test@example.com'
-            ]
-        }), 200
-
-    else:
+    handler = _DEBUG_HANDLERS.get(action)
+    if not handler:
         return jsonify({'error': f'Unknown action: {action}'}), 400
+
+    return handler()
 
 
 # ============================================================
@@ -663,7 +618,7 @@ def debug_management():
 @jwt_required()
 @admin_required()
 def block_container(container_id):
-    """Block a single user container"""
+    """Sperrt einen einzelnen Benutzer-Container."""
     admin_id = get_jwt_identity()
 
     container = UserContainer.query.get(container_id)
@@ -698,7 +653,7 @@ def block_container(container_id):
 @jwt_required()
 @admin_required()
 def unblock_container(container_id):
-    """Unblock a single user container"""
+    """Entsperrt einen einzelnen Benutzer-Container."""
     admin_id = get_jwt_identity()
 
     container = UserContainer.query.get(container_id)
@@ -726,7 +681,7 @@ def unblock_container(container_id):
 @jwt_required()
 @admin_required()
 def bulk_block_containers():
-    """Block multiple containers at once"""
+    """Sperrt mehrere Container gleichzeitig."""
     admin_id = get_jwt_identity()
     container_ids = request.json.get('container_ids', [])
 
@@ -766,7 +721,7 @@ def bulk_block_containers():
 @jwt_required()
 @admin_required()
 def bulk_unblock_containers():
-    """Unblock multiple containers at once"""
+    """Entsperrt mehrere Container gleichzeitig."""
     admin_id = get_jwt_identity()
     container_ids = request.json.get('container_ids', [])
 
@@ -799,13 +754,7 @@ def bulk_unblock_containers():
 @jwt_required()
 @admin_required()
 def reload_config():
-    """
-    Reload .env and update all config values.
-    IMPORTANT: Always call this endpoint after .env changes!
-
-    Instead of: docker-compose down + docker-compose up -d
-    Simply: curl -X POST http://localhost:5000/api/admin/config/reload -H "Authorization: Bearer $JWT_TOKEN"
-    """
+    """Lädt .env neu und aktualisiert alle Konfigurationswerte (ohne Neustart)."""
     try:
         from dotenv import load_dotenv
         import os

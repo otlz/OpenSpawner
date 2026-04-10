@@ -1,3 +1,7 @@
+"""
+Konfiguration für OpenSpawner.
+Alle Umgebungsvariablen sind in .env.example dokumentiert.
+"""
 import os
 import json
 from pathlib import Path
@@ -5,9 +9,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
     # ========================================
-    # Security
+    # Sicherheit
     # ========================================
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
@@ -37,72 +42,75 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # ========================================
-    # Docker Configuration - Dynamic Template System
+    # Docker-Konfiguration
     # ========================================
     DOCKER_SOCKET = os.getenv('DOCKER_SOCKET', 'unix://var/run/docker.sock')
 
-    # LEGACY: Still used by old spawn_container()
+    # Legacy-Fallback für Backward-Kompatibilität (models.py)
     USER_TEMPLATE_IMAGE = os.getenv('USER_TEMPLATE_IMAGE', 'user-template-01:latest')
 
+    # Wartezeit nach Container-Start (Sekunden)
+    CONTAINER_STARTUP_WAIT = int(os.getenv('CONTAINER_STARTUP_WAIT', 2))
+
     # ========================================
-    # Dynamic Template Loading
+    # Dynamisches Template-System
     # ========================================
+
+    # Werden von init_templates() befuellt
+    TEMPLATE_IMAGES = None
+    TEMPLATES_CONFIG = None
+    CONTAINER_TEMPLATES = None
 
     @staticmethod
     def _extract_type_from_image(image_name: str) -> str:
-        """
-        Extract container type from image name.
-
-        Examples:
-            'user-template-01:latest' -> 'template-01'
-            'user-template-next:latest' -> 'template-next'
-            'custom-nginx:v1.0' -> 'custom-nginx'
-        """
-        # Remove tag (:latest, :v1.0, etc.)
+        """Extrahiert den Container-Typ aus dem Image-Namen (z.B. 'user-template-01:latest' -> 'template-01')."""
         base_name = image_name.split(':')[0]
-
-        # Remove 'user-' prefix if present
         if base_name.startswith('user-'):
-            base_name = base_name[5:]  # 'user-template-01' -> 'template-01'
-
+            base_name = base_name[5:]
         return base_name
 
     @staticmethod
     def _load_template_images() -> list:
-        """Load template image list from USER_TEMPLATE_IMAGES (semicolon-separated)"""
+        """Lädt die Template-Image-Liste aus USER_TEMPLATE_IMAGES (Semikolon-getrennt)."""
         raw_images = os.getenv('USER_TEMPLATE_IMAGES', '')
         if not raw_images:
-            # Fallback for compatibility
             return ['user-template-01:latest']
-
         return [img.strip() for img in raw_images.split(';') if img.strip()]
 
     @staticmethod
     def _load_templates_config() -> dict:
-        """Load template configuration from templates.json"""
+        """Lädt Template-Metadaten aus templates.json."""
         config_path = Path(__file__).parent / 'templates.json'
-
         if not config_path.exists():
             return {}
-
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-
-            # Convert array to dictionary (key=type)
-            return {
-                template['type']: template
-                for template in data.get('templates', [])
-            }
+            return {t['type']: t for t in data.get('templates', [])}
         except (json.JSONDecodeError, KeyError) as e:
             import sys
             print(f"[CONFIG] Warning: Error loading templates.json: {e}", file=sys.stderr)
             return {}
 
-    # Temporary variables for template loading (processed after class definition)
-    TEMPLATE_IMAGES = None
-    TEMPLATES_CONFIG = None
-    CONTAINER_TEMPLATES = None
+    @classmethod
+    def init_templates(cls):
+        """
+        Lädt Container-Templates aus Umgebungsvariablen und templates.json.
+        Muss nach Klassendefinition aufgerufen werden.
+        """
+        cls.TEMPLATE_IMAGES = cls._load_template_images()
+        cls.TEMPLATES_CONFIG = cls._load_templates_config()
+
+        templates = {}
+        for image in cls.TEMPLATE_IMAGES:
+            container_type = cls._extract_type_from_image(image)
+            config_meta = cls.TEMPLATES_CONFIG.get(container_type, {})
+            templates[container_type] = {
+                'image': image,
+                'display_name': config_meta.get('display_name', container_type.replace('-', ' ').title()),
+                'description': config_meta.get('description', f'Container based on {image}')
+            }
+        cls.CONTAINER_TEMPLATES = templates
 
     # ========================================
     # Traefik / Domain Configuration
@@ -180,13 +188,13 @@ class Config:
 
 
 class DevelopmentConfig(Config):
-    """Development configuration"""
+    """Entwicklungskonfiguration."""
     DEBUG = True
     TESTING = False
 
 
 class ProductionConfig(Config):
-    """Production configuration"""
+    """Produktionskonfiguration."""
     DEBUG = False
     TESTING = False
 
@@ -201,30 +209,17 @@ class ProductionConfig(Config):
 
 
 class TestingConfig(Config):
-    """Testing configuration"""
+    """Testkonfiguration (In-Memory-Datenbank)."""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
 
 
-# Initialize templates AFTER class definition
-Config.TEMPLATE_IMAGES = Config._load_template_images()
-Config.TEMPLATES_CONFIG = Config._load_templates_config()
-
-# Build CONTAINER_TEMPLATES from templates
-templates = {}
-for image in Config.TEMPLATE_IMAGES:
-    container_type = Config._extract_type_from_image(image)
-    config_meta = Config.TEMPLATES_CONFIG.get(container_type, {})
-    templates[container_type] = {
-        'image': image,
-        'display_name': config_meta.get('display_name', container_type.replace('-', ' ').title()),
-        'description': config_meta.get('description', f'Container based on {image}')
-    }
-Config.CONTAINER_TEMPLATES = templates
+# Templates nach Klassendefinition initialisieren
+Config.init_templates()
 
 
-# Config dict for easy loading
+# Konfigurations-Dict für einfaches Laden
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,

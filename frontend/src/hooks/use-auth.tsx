@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true, message: data?.message };
-    } catch (err: any) {
-      const errorMsg = err.message || "Login fehlgeschlagen";
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Login fehlgeschlagen";
       setError(errorMsg);
       return { success: false };
     }
@@ -92,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true, message: data?.message };
-    } catch (err: any) {
-      const errorMsg = err.message || "Registrierung fehlgeschlagen";
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Registrierung fehlgeschlagen";
       setError(errorMsg);
       return { success: false };
     }
@@ -117,8 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: false };
-    } catch (err: any) {
-      const errorMsg = err.message || "Verifizierung fehlgeschlagen";
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Verifizierung fehlgeschlagen";
       setError(errorMsg);
       return { success: false };
     }
@@ -142,8 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: false };
-    } catch (err: any) {
-      const errorMsg = err.message || "Login fehlgeschlagen";
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Login fehlgeschlagen";
       setError(errorMsg);
       return { success: false };
     }

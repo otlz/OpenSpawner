@@ -20,9 +20,9 @@ function VerifyErrorContent() {
   const getErrorMessage = () => {
     switch (reason) {
       case "missing_token":
-        return "Der Verifizierungs-Link ist unvollstaendig.";
+        return "Der Verifizierungs-Link ist unvollständig.";
       case "invalid_token":
-        return "Der Verifizierungs-Link ist ungueltig oder bereits verwendet worden.";
+        return "Der Verifizierungs-Link ist ungültig oder bereits verwendet worden.";
       case "expired_token":
         return "Der Verifizierungs-Link ist abgelaufen.";
       default:
@@ -42,11 +42,11 @@ function VerifyErrorContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-center text-sm text-muted-foreground">
-            Moegliche Gruende:
+            Mögliche Gründe:
           </p>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             <li>Der Link wurde bereits verwendet</li>
-            <li>Der Link wurde nicht vollstaendig kopiert</li>
+            <li>Der Link wurde nicht vollständig kopiert</li>
             <li>Du hast einen neueren Verifizierungs-Link erhalten</li>
           </ul>
           <div className="flex flex-col gap-2 pt-4">

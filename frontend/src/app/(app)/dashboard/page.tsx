@@ -24,6 +24,53 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+/** Zeigt den passenden Aktions-Button für einen Container an (gesperrt/öffnen/starten). */
+function ContainerActionButton({
+  container,
+  isBlocked,
+  launching,
+  onLaunch,
+}: {
+  container: Container;
+  isBlocked: boolean;
+  launching: string | null;
+  onLaunch: (type: string) => void;
+}) {
+  if (isBlocked) {
+    return (
+      <Button className="flex-1" variant="destructive" disabled>
+        <ShieldAlert className="mr-2 h-4 w-4" />
+        Gesperrt
+      </Button>
+    );
+  }
+
+  if (container.status === "running") {
+    return (
+      <Button className="flex-1" onClick={() => window.open(container.service_url, "_blank")}>
+        <ExternalLink className="mr-2 h-4 w-4" />
+        Service öffnen
+      </Button>
+    );
+  }
+
+  return (
+    <Button className="flex-1" onClick={() => onLaunch(container.type)} disabled={launching === container.type}>
+      {launching === container.type ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Wird gestartet...
+        </>
+      ) : (
+        <>
+          <Play className="mr-2 h-4 w-4" />
+          {container.status === "not_created" ? "Erstellen & Öffnen" : "Starten & Öffnen"}
+        </>
+      )}
+    </Button>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -212,47 +259,14 @@ export default function DashboardPage() {
                     </div>
                   )}
 
+                  {/* Aktions-Button je nach Status */}
                   <div className="flex gap-2">
-                    {isBlocked ? (
-                      <Button
-                        className="flex-1"
-                        variant="destructive"
-                        disabled
-                      >
-                        <ShieldAlert className="mr-2 h-4 w-4" />
-                        Gesperrt
-                      </Button>
-                    ) : container.status === "running" ? (
-                      <Button
-                        className="flex-1"
-                        onClick={() =>
-                          window.open(container.service_url, "_blank")
-                        }
-                      >
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Service öffnen
-                      </Button>
-                    ) : (
-                      <Button
-                        className="flex-1"
-                        onClick={() => handleLaunchContainer(container.type)}
-                        disabled={launching === container.type}
-                      >
-                        {launching === container.type ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Wird gestartet...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="mr-2 h-4 w-4" />
-                            {container.status === "not_created"
-                              ? "Erstellen & Öffnen"
-                              : "Starten & Öffnen"}
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <ContainerActionButton
+                      container={container}
+                      isBlocked={isBlocked}
+                      launching={launching}
+                      onLaunch={handleLaunchContainer}
+                    />
                   </div>
                 </div>
               </CardContent>

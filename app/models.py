@@ -1,3 +1,4 @@
+"""SQLAlchemy-Modelle für Benutzer, Container, Tokens und Admin-Sessions."""
 from app.extensions import db
 from flask_login import UserMixin
 from datetime import datetime
@@ -5,7 +6,7 @@ from enum import Enum
 
 
 class UserState(Enum):
-    """User status for email verification and activity"""
+    """Benutzerstatus für E-Mail-Verifizierung und Aktivität."""
     REGISTERED = 'registered'   # Signup completed, email not verified
     VERIFIED = 'verified'       # Email verified, container never used
     ACTIVE = 'active'           # Container started at least once
@@ -42,14 +43,14 @@ class User(UserMixin, db.Model):
 
     @property
     def container_id(self):
-        """Backwards compatibility: returns primary container ID"""
+        """Abwärtskompatibilität: Gibt die Primär-Container-ID zurück."""
         if self.containers:
             return self.containers[0].container_id
         return None
 
     @container_id.setter
     def container_id(self, value):
-        """Backwards compatibility: sets primary container ID"""
+        """Abwärtskompatibilität: Setzt die Primär-Container-ID."""
         if not self.containers:
             # Create primary container if not present
             from config import Config
@@ -65,14 +66,14 @@ class User(UserMixin, db.Model):
 
     @property
     def container_port(self):
-        """Backwards compatibility: returns primary container port"""
+        """Abwärtskompatibilität: Gibt den Primär-Container-Port zurück."""
         if self.containers:
             return self.containers[0].container_port
         return None
 
     @container_port.setter
     def container_port(self, value):
-        """Backwards compatibility: sets primary container port"""
+        """Abwärtskompatibilität: Setzt den Primär-Container-Port."""
         if not self.containers:
             # Create primary container if not present
             from config import Config
@@ -87,7 +88,7 @@ class User(UserMixin, db.Model):
         self.containers[0].container_port = value
 
     def to_dict(self):
-        """Convert User to dictionary for API responses"""
+        """Konvertiert den Benutzer in ein Dictionary für API-Antworten."""
         return {
             'id': self.id,
             'email': self.email,
@@ -103,7 +104,7 @@ class User(UserMixin, db.Model):
 
 
 class MagicLinkToken(db.Model):
-    """Magic link tokens for passwordless authentication"""
+    """Magic-Link-Tokens für passwortlose Authentifizierung."""
     __tablename__ = 'magic_link_token'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -118,7 +119,7 @@ class MagicLinkToken(db.Model):
     user = db.relationship('User', backref=db.backref('magic_tokens', lazy=True, cascade='all, delete-orphan'))
 
     def is_valid(self):
-        """Check if token is still valid"""
+        """Prüft ob der Token noch gültig ist (nicht verwendet und nicht abgelaufen)."""
         if self.used_at is not None:
             return False  # Token already used
         if datetime.utcnow() > self.expires_at:
@@ -126,12 +127,12 @@ class MagicLinkToken(db.Model):
         return True
 
     def mark_as_used(self):
-        """Mark token as used"""
+        """Markiert den Token als verwendet."""
         self.used_at = datetime.utcnow()
 
 
 class UserContainer(db.Model):
-    """Multiple containers per user"""
+    """Mehrere Container pro Benutzer (Multi-Container-Unterstützung)."""
     __tablename__ = 'user_container'
 
     id = db.Column(db.Integer, primary_key=True)
