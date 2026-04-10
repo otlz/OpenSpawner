@@ -11,13 +11,7 @@ Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutz
 
 ## Screenshots
 
-**Dashboard** — Benutzer starten und verwalten ihre Container aus vorgefertigten Templates.
-
 ![Dashboard](docs/images/dashboard.png)
-
-**Administration** — Admins verwalten Benutzer, Container und Registrierungen.
-
-![Admin](docs/images/admin.png)
 
 ## Schnellstart (Docker Desktop)
 
