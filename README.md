@@ -1,6 +1,6 @@
 # OpenSpawner
 
-> Self-hosted service that spawns isolated Docker containers per user — passwordless magic-link auth, per-user subdomains, and a multi-template catalog.
+> Self-hosted service that spawns isolated Docker containers per user. Passwordless magic-link auth, per-user subdomains, and a multi-template catalog.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -26,10 +26,10 @@
 
 ## Features
 
-- Passwordless login via magic links — no password, no OAuth provider
+- Passwordless login via magic links (no password, no OAuth provider)
 - Per-user Docker container spawned from a catalog of templates
 - Built-in catalog: VS Code, Next.js, MariaDB, PlatformIO, LibreOffice, full Linux desktop, and more
-- JWT auth via `HttpOnly` cookie — each container validates independently
+- JWT auth via `HttpOnly` cookie; each container validates independently
 - Automatic idle shutdown and stale cleanup (user volumes preserved)
 - Production-ready with Traefik reverse proxy and Let's Encrypt
 
@@ -60,14 +60,14 @@ Browser
 
 ## Prerequisites
 
-Everything runs in containers — you only need Docker on the host.
+Everything runs in containers. You only need Docker on the host.
 
 | OS | Install |
 |---|---|
 | macOS | [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) |
 | Windows | [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) (WSL2 backend required) |
 | Linux | [Docker Engine](https://docs.docker.com/engine/install/) + [Compose plugin](https://docs.docker.com/compose/install/linux/) |
-| Server (headless) | Same as Linux — SSH-only setups work, no X server needed |
+| Server (headless) | Same as Linux. SSH-only setups work; no X server needed |
 
 **Minimum versions:** Docker ≥ 20.10, Docker Compose ≥ v2.0. Git is required to clone. Python and Node are **not** needed on the host.
 
@@ -95,7 +95,7 @@ Then open [http://localhost:3000](http://localhost:3000). API health check: [htt
 ## First login
 
 1. Open [http://localhost:3000](http://localhost:3000) and enter your email.
-2. SMTP is not configured by default — grab the magic link from the backend logs:
+2. SMTP is not configured by default. Grab the magic link from the backend logs:
    ```bash
    docker compose logs -f spawner | grep -i magic
    ```
@@ -107,7 +107,7 @@ All settings live in `.env` (template: `.env.example`). The six variables that m
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SECRET_KEY` | `dev-secret-...` | Flask session secret — **change in production** |
+| `SECRET_KEY` | `dev-secret-...` | Flask session secret (**change in production**) |
 | `BASE_DOMAIN` | `localhost` | Your domain (e.g. `example.com`) |
 | `SPAWNER_SUBDOMAIN` | `coder` | Produces `coder.example.com` |
 | `TRAEFIK_ENABLED` | `false` | Set to `true` for production |
@@ -160,7 +160,7 @@ See `templates.json` for the full metadata schema.
 
 ## Production deployment
 
-Production uses Traefik for routing, HTTPS, and per-user subdomains. You need a running Traefik instance with the Docker provider enabled and a certificate resolver (e.g. Let's Encrypt) — see [traefik.io](https://traefik.io/).
+Production uses Traefik for routing, HTTPS, and per-user subdomains. You need a running Traefik instance with the Docker provider enabled and a certificate resolver (e.g. Let's Encrypt). See [traefik.io](https://traefik.io/) for setup.
 
 ```bash
 # 1. Ensure the shared 'web' network exists (create it if Traefik hasn't)
@@ -206,7 +206,7 @@ OpenSpawner/
 
 ## License & Authors
 
-Licensed under the MIT License — see [LICENSE](LICENSE).
+Licensed under the MIT License. See [LICENSE](LICENSE).
 
-- **Rainer Wieland** — Karl Kübel Schule Bensheim
-- **Navin Dass** — Karl Kübel Schule Bensheim
+- **Rainer Wieland**, Karl Kübel Schule Bensheim
+- **Navin Dass**, Karl Kübel Schule Bensheim
