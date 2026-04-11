@@ -1,144 +1,212 @@
 # OpenSpawner
 
-Flask + Next.js Anwendung, die automatisch isolierte Docker-Container pro Benutzer bereitstellt. Jeder Benutzer bekommt eigene Container mit personalisierter URL, verwaltet über ein Web-Dashboard.
+> Self-hosted service that spawns isolated Docker containers per user — passwordless magic-link auth, per-user subdomains, and a multi-template catalog.
 
-## Was macht OpenSpawner?
-
-- Benutzer registrieren sich per Magic Link (passwortlos, kein Passwort nötig)
-- Jeder Benutzer kann Docker-Container aus fertigen Templates starten
-- Container sind automatisch per Web erreichbar
-- Admins verwalten Benutzer und Container über ein Dashboard
-
-## Screenshots
+![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
+![Node 20](https://img.shields.io/badge/node-20-green.svg)
+![Docker Compose v2](https://img.shields.io/badge/docker%20compose-v2-blue.svg)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
 ![Dashboard](docs/images/dashboard.png)
 
-## Schnellstart (Docker Desktop)
+## Table of contents
 
-Funktioniert auf **Windows** und **Linux** gleich — Docker Desktop muss installiert sein.
+- [Features](#features)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [First login](#first-login)
+- [Configuration](#configuration)
+- [Templates](#templates)
+- [Production deployment](#production-deployment)
+- [Project structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [License & Authors](#license--authors)
 
-```bash
-git clone https://github.com/otlz/OpenSpawner.git
-cd OpenSpawner
-cp .env.example .env
-docker compose --profile build build   # Template-Images bauen
-docker compose up --build              # Anwendung starten
-```
+## Features
 
-Dann öffnen: [http://localhost:3000](http://localhost:3000)
+- Passwordless login via magic links — no password, no OAuth provider
+- Per-user Docker container spawned from a catalog of templates
+- Built-in catalog: VS Code, Next.js, MariaDB, PlatformIO, LibreOffice, full Linux desktop, and more
+- JWT auth via `HttpOnly` cookie — each container validates independently
+- Automatic idle shutdown and stale cleanup (user volumes preserved)
+- Production-ready with Traefik reverse proxy and Let's Encrypt
 
-> **Wichtig:** Der erste registrierte Benutzer wird automatisch Admin.
-
-> **Ohne E-Mail-Server:** Magic Links erscheinen in den Backend-Logs:
-> ```bash
-> docker compose logs spawner
-> ```
-
-## Architektur
+## Architecture
 
 ```
 Browser
-  |
-  +---> Frontend (Next.js)     :3000
-  |       |
-  |       +---> /api/* Proxy
-  |               |
-  +---> Backend (Flask API)    :5000
-          |
-          +---> Docker Engine
-                  |
-                  +---> User Container A
-                  +---> User Container B
-                  +---> ...
+  │
+  ├─► Frontend (Next.js)     :3000
+  │     │
+  │     └─► /api/* proxy
+  │             │
+  ├─► Backend (Flask API)    :5000
+  │     │
+  │     └─► Docker Engine
+  │             │
+  │             ├─► User Container A
+  │             ├─► User Container B
+  │             └─► ...
 ```
 
-**Tech-Stack:**
-
-| Komponente | Technologie |
-|------------|-------------|
-| Backend | Flask, SQLAlchemy, JWT Auth, Docker SDK |
+| Layer | Stack |
+|---|---|
+| Backend | Flask, SQLAlchemy, JWT, Docker SDK |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, Radix UI |
-| Datenbank | SQLite (Standard) |
-| Auth | Passwortlose Magic Links + JWT Tokens |
+| Database | SQLite (default) |
+| Auth | Passwordless magic links + JWT cookie |
 
-## Konfiguration
+## Prerequisites
 
-Alle Einstellungen in `.env` (Vorlage: `.env.example`). Die wichtigsten:
+Everything runs in containers — you only need Docker on the host.
 
-| Variable | Standard | Beschreibung |
-|----------|----------|-------------|
-| `SECRET_KEY` | `dev-secret-...` | Flask Secret Key (in Produktion ändern!) |
-| `BASE_DOMAIN` | `localhost` | Domain |
-| `TRAEFIK_ENABLED` | `false` | Traefik Reverse Proxy aktivieren |
-| `USER_TEMPLATE_IMAGES` | alle Templates | Semikolon-getrennte Liste der Templates |
-| `DEFAULT_MEMORY_LIMIT` | `512m` | RAM-Limit pro Container |
-| `DEFAULT_CPU_QUOTA` | `50000` | CPU-Limit (50000 = 0.5 CPU) |
+| OS | Install |
+|---|---|
+| macOS | [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) |
+| Windows | [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) (WSL2 backend required) |
+| Linux | [Docker Engine](https://docs.docker.com/engine/install/) + [Compose plugin](https://docs.docker.com/compose/install/linux/) |
+| Server (headless) | Same as Linux — SSH-only setups work, no X server needed |
 
-Alle Optionen sind in [.env.example](.env.example) dokumentiert.
+**Minimum versions:** Docker ≥ 20.10, Docker Compose ≥ v2.0. Git is required to clone. Python and Node are **not** needed on the host.
+
+## Quick start
+
+Works identically on macOS, Linux, Windows (WSL2 / PowerShell / Git Bash), and headless servers.
+
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/otlz/OpenSpawner.git
+cd OpenSpawner
+
+# 2. Create your .env from the template
+cp .env.example .env
+
+# 3. Build templates and start the stack
+docker compose --profile build build
+docker compose up -d
+```
+
+Then open [http://localhost:3000](http://localhost:3000). API health check: [http://localhost:5000/health](http://localhost:5000/health).
+
+> **Shortcut for Linux/macOS:** `bash install.sh` runs the same sequence with version checks and auto-creates the Docker `web` network.
+
+## First login
+
+1. Open [http://localhost:3000](http://localhost:3000) and enter your email.
+2. SMTP is not configured by default — grab the magic link from the backend logs:
+   ```bash
+   docker compose logs -f spawner | grep -i magic
+   ```
+3. Paste the link into your browser. **The first user to register automatically becomes admin.**
+
+## Configuration
+
+All settings live in `.env` (template: `.env.example`). The six variables that matter for the first run:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SECRET_KEY` | `dev-secret-...` | Flask session secret — **change in production** |
+| `BASE_DOMAIN` | `localhost` | Your domain (e.g. `example.com`) |
+| `SPAWNER_SUBDOMAIN` | `coder` | Produces `coder.example.com` |
+| `TRAEFIK_ENABLED` | `false` | Set to `true` for production |
+| `USER_TEMPLATE_IMAGES` | all templates | Semicolon-separated list of templates to build |
+| `DEFAULT_MEMORY_LIMIT` | `512m` | RAM limit per user container |
+
+Generate a production `SECRET_KEY`:
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Full configuration reference: [`.env.example`](.env.example).
 
 ## Templates
 
-OpenSpawner kommt mit fertigen Container-Templates, organisiert in Kategorien:
+OpenSpawner ships with a catalog of ready-to-run container templates, organized by category.
 
-**Anwendungen**
+**Applications**
 
-| Template | Beschreibung |
-|----------|-------------|
-| `template-nginx` | Statischer Webserver mit Willkommensseite |
-| `template-nextjs` | React App mit Shadcn/UI und TypeScript |
-| `template-dictionary` | Wörter und Definitionen lokal speichern |
-| `template-vcoder` | PlatformIO IDE für ESP8266 und Wemos |
-| `template-vscode` | Code Server mit eigener Erweiterungsverwaltung |
-| `template-office` | Writer, Calc und Impress im Browser |
+| Template | Description |
+|---|---|
+| `template-nginx` | Static web server with welcome page |
+| `template-nextjs` | React app with Shadcn/UI and TypeScript |
+| `template-dictionary` | Store words and definitions locally |
+| `template-vcoder` | PlatformIO IDE for ESP8266 and Wemos |
+| `template-vscode` | Code Server with extension management |
+| `template-office` | Writer, Calc, and Impress in the browser |
 
-**Betriebssysteme**
+**Operating systems**
 
-| Template | Beschreibung |
-|----------|-------------|
-| `template-linuxmint` | Ubuntu XFCE-Desktop im Browser |
+| Template | Description |
+|---|---|
+| `template-linuxmint` | Ubuntu XFCE desktop in the browser |
 
-**Datenbanken**
+**Databases**
 
-| Template | Beschreibung |
-|----------|-------------|
-| `template-mariadb` | MariaDB Datenbank mit phpMyAdmin Web-Interface |
+| Template | Description |
+|---|---|
+| `template-mariadb` | MariaDB with phpMyAdmin web interface |
 
-### Eigenes Template erstellen
+### Adding your own template
 
-1. Verzeichnis `templates/<kategorie>/template-xyz/` mit `Dockerfile` anlegen (muss Port **8080** exposen)
-2. In `.env` zu `USER_TEMPLATE_IMAGES` hinzufügen
-3. Metadaten in `templates.json` eintragen (inkl. Kategorie)
-4. Bauen: `docker compose --profile build build`
+1. Create `templates/<category>/template-xyz/` with a `Dockerfile` (must expose port **8080**).
+2. Append `template-xyz:latest` to `USER_TEMPLATE_IMAGES` in `.env`.
+3. Add metadata (display name, description, category, icon) to `templates.json`.
+4. Build: `docker compose --profile build build`.
 
-## Produktion (mit Traefik)
+See `templates.json` for the full metadata schema.
 
-Für Produktion mit HTTPS und Domain-Routing:
+## Production deployment
 
-```bash
-# In .env anpassen:
-BASE_DOMAIN=deine-domain.de
-SPAWNER_SUBDOMAIN=coder
-TRAEFIK_ENABLED=true
-TRAEFIK_NETWORK=web
-TRAEFIK_CERTRESOLVER=lets-encrypt
-TRAEFIK_ENTRYPOINT=websecure
-```
+Production uses Traefik for routing, HTTPS, and per-user subdomains. You need a running Traefik instance with the Docker provider enabled and a certificate resolver (e.g. Let's Encrypt) — see [traefik.io](https://traefik.io/).
 
 ```bash
+# 1. Ensure the shared 'web' network exists (create it if Traefik hasn't)
+docker network create web
+
+# 2. In .env, set:
+#    BASE_DOMAIN=your-domain.com
+#    TRAEFIK_ENABLED=true
+#    TRAEFIK_NETWORK=web
+#    TRAEFIK_CERTRESOLVER=lets-encrypt
+#    TRAEFIK_ENTRYPOINT=websecure
+
+# 3. Start with the production compose file
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Voraussetzung: Ein laufender [Traefik](https://traefik.io/) Reverse Proxy mit Docker Provider.
+## Project structure
 
-## API-Dokumentation
+```
+OpenSpawner/
+├── app/                     # Flask backend (routes, services, models)
+│   ├── routes/              # api.py, admin.py, auth.py
+│   └── services/            # container_manager, reaper, email_service
+├── frontend/                # Next.js 14 + TypeScript + Tailwind
+├── templates/               # User container templates (software/, os/, database/)
+├── docs/                    # Architecture, guides, security notes
+├── config.py                # Env var loader
+├── run.py                   # Flask entry point
+├── docker-compose.yml       # Local development
+├── docker-compose.prod.yml  # Production (Traefik)
+├── install.sh               # One-shot installer (Linux/macOS)
+├── templates.json           # Template metadata (names, icons, limits)
+└── .env.example             # Configuration reference
+```
 
-Swagger UI ist verfügbar unter [http://localhost:5000/swagger](http://localhost:5000/swagger).
+## Troubleshooting
 
-## Autoren
+- **Port 3000 or 5000 already in use** → stop the other process, or change `SPAWNER_PORT` in `.env`.
+- **Magic link email never arrives** → expected without SMTP; grab it from `docker compose logs spawner | grep magic`.
+- **`network web not found` on `docker-compose.prod.yml`** → run `docker network create web`.
+- **User container returns 403** → JWT cookie missing or expired; log out and back in.
+- **`template-nextjs` build looks stuck** → it runs `npm install` + build inside the container; allow 2–5 minutes on the first build.
+
+## License & Authors
+
+Licensed under the MIT License — see [LICENSE](LICENSE).
 
 - **Rainer Wieland** — Karl Kübel Schule Bensheim
 - **Navin Dass** — Karl Kübel Schule Bensheim
-
-## Lizenz
-
-MIT — siehe [LICENSE](LICENSE)
