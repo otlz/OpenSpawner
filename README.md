@@ -8,7 +8,7 @@
 ![Docker Compose v2](https://img.shields.io/badge/docker%20compose-v2-blue.svg)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-![Dashboard](docs/images/dashboard.png)
+![Dashboard](docs/images/dashboard-dark.png)
 
 ## Table of contents
 
