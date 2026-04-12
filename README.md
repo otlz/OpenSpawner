@@ -82,8 +82,22 @@ cd OpenSpawner
 
 # 2. Create your .env from the template
 cp .env.example .env
+```
 
-# 3. Build templates and start the stack
+### Minimal setup
+
+Builds only the default templates (Nginx, PlatformIO IDE, MariaDB). Fastest way to get started.
+
+```bash
+docker compose --profile default build
+docker compose up -d
+```
+
+### Full setup
+
+Builds all available templates from the catalog.
+
+```bash
 docker compose --profile build build
 docker compose up -d
 ```
@@ -91,6 +105,23 @@ docker compose up -d
 Then open [http://localhost:3000](http://localhost:3000). API health check: [http://localhost:5000/health](http://localhost:5000/health).
 
 > **Shortcut for Linux/macOS:** `bash install.sh` runs the same sequence with version checks and auto-creates the Docker `web` network.
+
+### Adding templates later
+
+After the initial setup, you can build additional templates at any time. They appear on the user dashboard automatically.
+
+```bash
+# Build a single template
+docker compose build template-office
+
+# Build multiple templates at once
+docker compose build template-vscode template-linuxmint
+
+# Build all remaining templates
+docker compose --profile build build
+```
+
+No restart needed. The dashboard only shows templates whose images are available locally.
 
 ## First login
 
@@ -111,7 +142,7 @@ All settings live in `.env` (template: `.env.example`). The six variables that m
 | `BASE_DOMAIN` | `localhost` | Your domain (e.g. `example.com`) |
 | `SPAWNER_SUBDOMAIN` | `coder` | Produces `coder.example.com` |
 | `TRAEFIK_ENABLED` | `false` | Set to `true` for production |
-| `USER_TEMPLATE_IMAGES` | all templates | Semicolon-separated list of templates to build |
+| `USER_TEMPLATE_IMAGES` | (from templates.json) | Fallback if `templates.json` is missing; semicolon-separated image list |
 | `DEFAULT_MEMORY_LIMIT` | `512m` | RAM limit per user container |
 
 Generate a production `SECRET_KEY`:
@@ -152,9 +183,9 @@ OpenSpawner ships with a catalog of ready-to-run container templates, organized 
 ### Adding your own template
 
 1. Create `templates/<category>/template-xyz/` with a `Dockerfile` (must expose port **8080**).
-2. Append `template-xyz:latest` to `USER_TEMPLATE_IMAGES` in `.env`.
+2. Add a build service to `docker-compose.yml` (under the `build` profile).
 3. Add metadata (display name, description, category, icon) to `templates.json`.
-4. Build: `docker compose --profile build build`.
+4. Build: `docker compose build template-xyz`.
 
 See `templates.json` for the full metadata schema.
 

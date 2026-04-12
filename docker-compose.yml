@@ -76,7 +76,7 @@ services:
   template-nginx:
     build: ./templates/software/nginx
     image: template-nginx:latest
-    profiles: ["build"]
+    profiles: ["build", "default"]
 
   template-nextjs:
     build: ./templates/software/nextjs
@@ -91,7 +91,7 @@ services:
   template-vcoder:
     build: ./templates/software/vcoder
     image: template-vcoder:latest
-    profiles: ["build"]
+    profiles: ["build", "default"]
 
   template-vscode:
     build: ./templates/software/vscode
@@ -111,7 +111,7 @@ services:
   template-mariadb:
     build: ./templates/database/mariadb
     image: template-mariadb:latest
-    profiles: ["build"]
+    profiles: ["build", "default"]
 
 volumes:
   spawner-data:

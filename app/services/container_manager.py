@@ -22,6 +22,27 @@ class ContainerManager:
                 raise Exception(f"Docker connection failed: {str(e)}")
         return self.client
 
+    def image_exists(self, image_name: str) -> bool:
+        """Prüft ob ein Docker-Image lokal vorhanden ist."""
+        try:
+            self._get_client().images.get(image_name)
+            return True
+        except docker.errors.ImageNotFound:
+            return False
+        except Exception:
+            return False
+
+    def get_available_images(self) -> set:
+        """Gibt ein Set aller lokal verfügbaren Image-Tags zurück."""
+        try:
+            images = self._get_client().images.list()
+            tags = set()
+            for img in images:
+                tags.update(img.tags or [])
+            return tags
+        except Exception:
+            return set()
+
     def _build_traefik_labels(self, user_id, slug, container_type=None):
         """Erstellt Traefik-Routing-Labels für einen Benutzer-Container."""
         base_host = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"

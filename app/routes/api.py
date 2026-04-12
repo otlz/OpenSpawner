@@ -679,8 +679,14 @@ def api_user_containers():
         uc.container_type: uc
         for uc in UserContainer.query.filter_by(user_id=user.id).all()
     }
+
+    # Nur Templates anzeigen, deren Docker-Image lokal vorhanden ist
+    container_mgr = ContainerManager()
+    available_images = container_mgr.get_available_images()
     containers = []
     for container_type, template in current_app.config["CONTAINER_TEMPLATES"].items():
+        if template["image"] not in available_images:
+            continue
         user_container = all_user_containers.get(container_type)
 
         # Service URL
@@ -692,7 +698,6 @@ def api_user_containers():
         status = "not_created"
         if user_container and user_container.container_id:
             try:
-                container_mgr = ContainerManager()
                 status = container_mgr.get_container_status(user_container.container_id)
                 # Sync DB status with Docker reality
                 if status == "not_found":
@@ -751,6 +756,11 @@ def api_container_launch(container_type):
 
     if container_type not in current_app.config["CONTAINER_TEMPLATES"]:
         return jsonify({"error": f"Invalid container type: {container_type}"}), 400
+
+    # Prüfe ob das Template-Image lokal vorhanden ist
+    template = current_app.config["CONTAINER_TEMPLATES"][container_type]
+    if not ContainerManager().image_exists(template["image"]):
+        return jsonify({"error": f"Template image not available: {container_type}"}), 404
 
     # Launch protection: blocked containers must not be started
     user_container = UserContainer.query.filter_by(
@@ -921,6 +931,10 @@ def api_container_recreate(container_type):
 
     if container_type not in current_app.config["CONTAINER_TEMPLATES"]:
         return jsonify({"error": f"Invalid container type: {container_type}"}), 400
+
+    template = current_app.config["CONTAINER_TEMPLATES"][container_type]
+    if not ContainerManager().image_exists(template["image"]):
+        return jsonify({"error": f"Template image not available: {container_type}"}), 404
 
     user_container = UserContainer.query.filter_by(
         user_id=user.id, container_type=container_type
