@@ -7,9 +7,10 @@
 
 services:
   # Flask API Backend
-  spawner:
+  backend:
     build: .
-    container_name: spawner
+    image: openspawner-backend
+    container_name: backend
     restart: unless-stopped
 
     ports:
@@ -62,7 +63,8 @@ services:
   # Next.js Frontend
   frontend:
     build: ./frontend
-    container_name: spawner-frontend
+    image: openspawner-frontend
+    container_name: frontend
     restart: unless-stopped
 
     environment:
@@ -97,7 +99,7 @@ services:
       start_period: 30s
 
     depends_on:
-      - spawner
+      - backend
 
 # External network (must exist, created by Traefik)
 networks:

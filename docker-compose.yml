@@ -8,9 +8,10 @@
 
 services:
   # Flask API Backend
-  spawner:
+  backend:
     build: .
-    container_name: spawner
+    image: openspawner-backend
+    container_name: backend
     restart: unless-stopped
 
     ports:
@@ -45,8 +46,9 @@ services:
     build:
       context: ./frontend
       args:
-        - INTERNAL_API_URL=http://spawner:5000
-    container_name: spawner-frontend
+        - INTERNAL_API_URL=http://backend:5000
+    image: openspawner-frontend
+    container_name: frontend
     restart: unless-stopped
 
     ports:
@@ -68,7 +70,7 @@ services:
       start_period: 30s
 
     depends_on:
-      - spawner
+      - backend
 
   # User container templates (built once, spawned per user)
   template-nginx:

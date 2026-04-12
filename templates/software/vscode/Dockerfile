@@ -7,4 +7,4 @@ WORKDIR /home/coder/project
 
 EXPOSE 8080
 
-CMD ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "none"]
+CMD ["code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "none", "--ignore-last-opened", "/home/coder/project"]
