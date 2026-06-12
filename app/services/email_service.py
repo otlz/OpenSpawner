@@ -92,66 +92,110 @@ def send_magic_link_email(email: str, token: str, token_type: str) -> bool:
     # URL based on type
     if token_type == 'signup':
         verify_url = f"{frontend_url}/verify-signup?token={token}"
-        subject = "Complete Registration - OpenSpawner"
-        action_text = "Complete Registration"
-        greeting = "Thank you for registering!"
+        subject = "Registrierung abschließen · OpenSpawner"
+        action_text = "Registrierung abschließen"
+        heading = "Registrierung abschließen"
+        intro = (
+            "Danke für deine Registrierung. Bestätige deine E-Mail-Adresse, "
+            "um deine persönliche Container-Umgebung zu aktivieren."
+        )
+        preheader = "Bestätige deine E-Mail-Adresse für OpenSpawner."
     else:  # login
         verify_url = f"{frontend_url}/verify-login?token={token}"
-        subject = "Login Link - OpenSpawner"
-        action_text = "Log In Now"
-        greeting = "Here is your login link:"
+        subject = "Dein Anmeldelink · OpenSpawner"
+        action_text = "Jetzt anmelden"
+        heading = "Anmelden bei OpenSpawner"
+        intro = "Mit einem Klick bist du angemeldet, ganz ohne Passwort."
+        preheader = "Dein Anmeldelink für OpenSpawner."
 
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: #1a1a2e; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 30px; background: #f9f9f9; }}
-            .button {{ display: inline-block; padding: 12px 30px; background: #4f46e5; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-            .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>OpenSpawner</h1>
-            </div>
-            <div class="content">
-                <p>{greeting}</p>
-                <p>Click the button below to continue:</p>
-                <p style="text-align: center;">
-                    <a href="{verify_url}" class="button">{action_text}</a>
-                </p>
-                <p>Or copy this link into your browser:</p>
-                <p style="word-break: break-all; background: #eee; padding: 10px; border-radius: 3px;">
+    expiry_minutes = max(1, Config.MAGIC_LINK_TOKEN_EXPIRY // 60)
+
+    # Styling matches the landing page (shadcn neutral palette): white card on
+    # neutral-50, near-black primary button, muted grays. All styles inline,
+    # table layout for email client compatibility.
+    font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+    mono = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#fafafa;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{preheader}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fafafa;">
+  <tr>
+    <td align="center" style="padding:48px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:440px;">
+        <tr>
+          <td style="padding:0 4px 16px;font-family:{font};font-size:16px;font-weight:600;letter-spacing:-0.2px;color:#0a0a0a;">
+            OpenSpawner
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;border:1px solid #e5e5e5;border-radius:12px;padding:32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="font-family:{font};font-size:20px;font-weight:600;letter-spacing:-0.3px;color:#0a0a0a;padding-bottom:8px;">
+                  {heading}
+                </td>
+              </tr>
+              <tr>
+                <td style="font-family:{font};font-size:14px;line-height:22px;color:#737373;padding-bottom:24px;">
+                  {intro}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <a href="{verify_url}" style="display:inline-block;background-color:#171717;color:#fafafa;font-family:{font};font-size:14px;font-weight:500;text-decoration:none;border-radius:10px;padding:11px 20px;">
+                    {action_text}
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-family:{font};font-size:13px;line-height:20px;color:#737373;padding-top:28px;padding-bottom:8px;">
+                  Oder kopiere diesen Link in deinen Browser:
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="background-color:#f5f5f5;border-radius:8px;padding:10px 12px;font-family:{mono};font-size:12px;line-height:18px;color:#525252;word-break:break-all;">
                     {verify_url}
-                </p>
-                <p><small>This link is valid for 15 minutes and can only be used once.</small></p>
-            </div>
-            <div class="footer">
-                <p>This email was generated automatically. Please do not reply.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 4px 0;font-family:{font};font-size:12px;line-height:18px;color:#a3a3a3;">
+            Der Link ist {expiry_minutes} Minuten gültig und kann nur einmal verwendet werden.<br>
+            Diese E-Mail wurde automatisch erstellt, bitte antworte nicht darauf.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
 
-    text_content = f"""
-    {greeting}
+    text_content = f"""{heading}
 
-    Please open the following link or copy it into your browser:
+{intro}
 
-    {verify_url}
+Öffne den folgenden Link oder kopiere ihn in deinen Browser:
 
-    Note: This link is valid for 15 minutes and can only be used once.
+{verify_url}
 
-    ---
-    This email was generated automatically.
-    """
+Hinweis: Der Link ist {expiry_minutes} Minuten gültig und kann nur einmal verwendet werden.
+
+---
+Diese E-Mail wurde automatisch erstellt, bitte antworte nicht darauf.
+"""
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
