@@ -10,5 +10,6 @@ data/*.db
 logs/*.log
 .git
 .gitignore
+landing/
 .DS_Store
 *.md

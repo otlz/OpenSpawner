@@ -216,6 +216,7 @@ OpenSpawner/
 │   ├── routes/              # api.py, admin.py, auth.py
 │   └── services/            # container_manager, reaper, email_service
 ├── frontend/                # Next.js 14 + TypeScript + Tailwind
+├── landing/                 # Marketing site (separate Dokploy app, see landing/README.md)
 ├── templates/               # User container templates (software/, os/, database/)
 ├── docs/                    # Architecture, guides, security notes
 ├── config.py                # Env var loader
@@ -226,6 +227,10 @@ OpenSpawner/
 ├── templates.json           # Template metadata (names, icons, limits)
 └── .env.example             # Configuration reference
 ```
+
+## Landing page
+
+`landing/` contains a self-contained Next.js marketing site for openspawner.de (plus .com, .org and .net redirects). It is deployed as a separate Dokploy application pointing at this repo with `landing/Dockerfile` and Docker context `landing`; it is not part of docker-compose and has no dependency on the backend. Setup and deployment details: [landing/README.md](landing/README.md).
 
 ## Troubleshooting
 

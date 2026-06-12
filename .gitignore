@@ -27,6 +27,7 @@ eggs/
 lib/
 !frontend/src/lib/
 !templates/template-nextjs/src/lib/
+!landing/src/lib/
 lib64/
 parts/
 sdist/
