@@ -51,7 +51,7 @@ def _get_service_url(slug_or_path, container_port=None):
     if Config.TRAEFIK_ENABLED:
         scheme = Config.PREFERRED_URL_SCHEME
         domain = f"{Config.SPAWNER_SUBDOMAIN}.{Config.BASE_DOMAIN}"
-        return f"{scheme}://{domain}/{slug_or_path}"
+        return f"{scheme}://{domain}/{slug_or_path}/"
     else:
         if container_port and container_port != 8080:
             return f"http://localhost:{container_port}"
