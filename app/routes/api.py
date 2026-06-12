@@ -24,6 +24,8 @@ from config import Config
 import re
 import os
 import uuid
+import socket
+import time
 from werkzeug.utils import secure_filename
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -780,6 +782,25 @@ def api_container_launch(container_type):
     try:
         orchestrator = ContainerOrchestrator()
         uc, _ = orchestrator.ensure_running(user, container_type)
+
+        # Warten bis der Dienst im Container antwortet und Traefik die Route
+        # übernommen hat — sonst läuft der erste "Öffnen"-Klick in die Frontend-404.
+        try:
+            client = ContainerManager()._get_client()
+            cont = client.containers.get(uc.container_id)
+            ip = cont.attrs["NetworkSettings"]["Networks"].get(
+                Config.TRAEFIK_NETWORK, {}
+            ).get("IPAddress")
+            deadline = time.time() + 20
+            while ip and time.time() < deadline:
+                try:
+                    with socket.create_connection((ip, 8080), timeout=1):
+                        break
+                except OSError:
+                    time.sleep(0.5)
+            time.sleep(2.5)  # Traefik Route-Propagation (providersThrottleDuration)
+        except Exception:
+            pass  # best-effort: lieber etwas früher öffnen als den Launch blockieren
     except Exception as e:
         current_app.logger.error(f"Container launch failed: {str(e)}")
         return jsonify({"error": f"Container could not be created: {str(e)}"}), 500
