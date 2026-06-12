@@ -13,14 +13,11 @@ services:
     container_name: backend
     restart: unless-stopped
 
-    ports:
-      - "5000:5000"  # Optional: direct access for debugging
-
     volumes:
       - .env:/app/.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:rw
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - spawner-data:/app/data
+      - spawner-logs:/app/logs
 
     environment:
       - TRAEFIK_ENABLED=true
@@ -31,7 +28,7 @@ services:
     labels:
       # Traefik routing
       - "traefik.enable=true"
-      - "traefik.docker.network=web"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-web}"
 
       # API router (higher priority for /api/*)
       - "traefik.http.routers.spawner-api.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`) && PathPrefix(`/api`)"
@@ -76,7 +73,7 @@ services:
     labels:
       # Traefik routing
       - "traefik.enable=true"
-      - "traefik.docker.network=web"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-web}"
 
       # Frontend router (lower priority - catch-all)
       - "traefik.http.routers.spawner-frontend.rule=Host(`${SPAWNER_SUBDOMAIN:-coder}.${BASE_DOMAIN}`)"
@@ -105,3 +102,9 @@ services:
 networks:
   web:
     external: true
+    name: ${TRAEFIK_NETWORK:-web}
+
+# Named volumes for persistent data (survive Dokploy git refreshes)
+volumes:
+  spawner-data:
+  spawner-logs:
