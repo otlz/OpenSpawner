@@ -37,6 +37,20 @@ export function LandingFooter() {
               </li>
             </ul>
           </div>
+
+          <div>
+            <h5 className="mb-3 text-sm font-semibold">Rechtliches</h5>
+            <ul className="space-y-2">
+              <li>
+                <Link
+                  href="/impressum"
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Impressum
+                </Link>
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="mt-8 flex flex-row items-center justify-between gap-4 border-t border-border/40 pt-8">
