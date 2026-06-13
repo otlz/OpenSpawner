@@ -11,18 +11,17 @@ export function HeroSection() {
       <div className="mx-auto w-full max-w-7xl px-4 lg:px-8">
         <FadeInView className="max-w-5xl">
           <h1 className="text-3xl leading-[1.1] font-semibold tracking-tight md:text-4xl lg:text-5xl">
-            Entwicklungsumgebungen per Klick.
+            Eine eigene Umgebung für jeden Nutzer.
             <br />
             <span className="text-muted-foreground">
-              Ein isolierter Container für jeden Nutzer.
+              Gestartet per Klick, erreichbar unter eigener Subdomain.
             </span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
-            OpenSpawner ist eine selbst gehostete Open-Source-Plattform, die für
-            jeden Nutzer einen eigenen Docker-Container startet: mit
-            passwortlosem Login, eigener Subdomain und einem Katalog fertiger
-            Vorlagen.
+            OpenSpawner startet für jeden angemeldeten Nutzer einen eigenen
+            Docker-Container. Die Anmeldung läuft über einen Link per E-Mail,
+            ganz ohne Passwort. Vorlage aus dem Katalog wählen und loslegen.
           </p>
 
           <div className="mt-8">

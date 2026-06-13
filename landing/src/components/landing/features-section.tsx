@@ -26,37 +26,37 @@ const features: Feature[] = [
   {
     title: "Passwortloser Login",
     description:
-      "Anmeldung per Magic Link: Nutzer erhalten einen Link per E-Mail, ganz ohne Passwort und ohne externen OAuth-Anbieter.",
+      "Die Anmeldung läuft über einen Magic Link per E-Mail. Kein Passwort, kein OAuth-Anbieter, kein zusätzliches Konto.",
     Icon: MailCheck,
   },
   {
     title: "Isolierte Container",
     description:
-      "Jeder Nutzer bekommt einen eigenen Docker-Container mit eigener Subdomain, sauber getrennt von allen anderen.",
+      "Jeder Nutzer arbeitet in seinem eigenen Docker-Container unter einer eigenen Subdomain, getrennt von allen anderen.",
     Icon: Container,
   },
   {
     title: "Vorlagen-Katalog",
     description:
-      "Fertige Templates für VS Code, Next.js, MariaDB, Linux Mint, LibreOffice und die ESP8266-Entwicklung, startklar per Klick.",
+      "Fertige Vorlagen für VS Code, Next.js, MariaDB, LibreOffice, einen Linux-Desktop und die ESP8266-Entwicklung mit PlatformIO.",
     Icon: LayoutGrid,
   },
   {
     title: "Automatisches Aufräumen",
     description:
-      "Inaktive Container werden automatisch gestoppt und entfernt, die Daten der Nutzer bleiben dabei erhalten.",
+      "Container, die niemand mehr nutzt, werden automatisch gestoppt und entfernt. Die Daten der Nutzer bleiben erhalten.",
     Icon: TimerOff,
   },
   {
     title: "Bereit für die Produktion",
     description:
-      "Traefik als Reverse Proxy und Let's Encrypt für HTTPS sind vorbereitet, inklusive automatischer Zertifikate.",
+      "Traefik übernimmt das Routing, Let's Encrypt die Zertifikate. HTTPS und Subdomains sind ab Werk eingerichtet.",
     Icon: ShieldCheck,
   },
   {
     title: "Open Source und selbst gehostet",
     description:
-      "MIT-lizenziert und komplett auf eigener Infrastruktur betrieben: volle Kontrolle über Daten, Nutzer und Umgebung.",
+      "OpenSpawner steht unter der MIT-Lizenz und läuft auf deiner eigenen Infrastruktur. Daten und Nutzer bleiben bei dir.",
     Icon: Server,
   },
 ];
@@ -86,8 +86,8 @@ export function FeaturesSection() {
             Was OpenSpawner kann
           </h2>
           <p className="text-muted-foreground">
-            Von der Anmeldung bis zum Aufräumen: OpenSpawner übernimmt den
-            kompletten Lebenszyklus der Nutzer-Container.
+            OpenSpawner kümmert sich um den ganzen Ablauf, von der Anmeldung bis
+            zum Aufräumen alter Container.
           </p>
         </FadeInView>
 
