@@ -204,9 +204,18 @@ docker network create web
 #    TRAEFIK_CERTRESOLVER=lets-encrypt
 #    TRAEFIK_ENTRYPOINT=websecure
 
-# 3. Start with the production compose file
+# 3. Start the backend and frontend
 docker compose -f docker-compose.prod.yml up -d --build
+
+# 4. Build the user template images on the host (required, one time).
+#    The dashboard only lists templates whose image exists locally, so without
+#    this step every user sees an empty dashboard.
+docker compose -f docker-compose.prod.yml --profile default build   # core set
+#    or build the full catalog:
+docker compose -f docker-compose.prod.yml --profile build build
 ```
+
+The template images are build-only (the `build`/`default` profiles keep them out of `up`), so they never run as standalone services. Add more later with `docker compose -f docker-compose.prod.yml build template-vscode`, no restart needed.
 
 ## Project structure
 
@@ -234,11 +243,12 @@ OpenSpawner/
 
 ## Troubleshooting
 
+- **Dashboard is empty after login** → the template images are not built on the host. The dashboard only lists templates whose image exists locally. Run `docker compose -f docker-compose.prod.yml --profile default build` (or `--profile build` for all), then check with `docker images | grep template-`. The backend also logs the missing images: `docker logs backend | grep SPAWNER`.
 - **Port 3000 or 5000 already in use** → stop the other process, or change `SPAWNER_PORT` in `.env`.
 - **Magic link email never arrives** → expected without SMTP; grab it from `docker compose logs spawner | grep magic`.
 - **`network web not found` on `docker-compose.prod.yml`** → run `docker network create web`.
 - **User container returns 403** → JWT cookie missing or expired; log out and back in.
-- **`template-nextjs` build looks stuck** → it runs `npm install` + build inside the container; allow 2–5 minutes on the first build.
+- **`template-nextjs` build looks stuck** → it runs `npm install` + build inside the container; allow 2 to 5 minutes on the first build.
 
 ## License & Authors
 

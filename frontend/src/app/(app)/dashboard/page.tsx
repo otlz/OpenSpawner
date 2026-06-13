@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Square,
   Trash2,
+  PackageOpen,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -292,6 +293,25 @@ export default function DashboardPage() {
           {skeletonGrid}
           {skeletonGrid}
         </>
+      ) : containers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+          <PackageOpen className="mb-4 h-10 w-10 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Keine Vorlagen verfügbar</h2>
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            Aktuell sind keine Vorlagen vorhanden. Eine Vorlage erscheint hier,
+            sobald ihr Docker-Image auf dem Server gebaut wurde.
+          </p>
+          {user?.is_admin && (
+            <p className="mt-4 max-w-lg text-xs text-muted-foreground">
+              Als Administrator: Vorlagen-Images auf dem Server bauen, zum
+              Beispiel mit{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                docker compose -f docker-compose.prod.yml --profile build build
+              </code>
+              .
+            </p>
+          )}
+        </div>
       ) : (
         <>
           {[...categories].sort((a, b) => a.order - b.order).map((category) => {

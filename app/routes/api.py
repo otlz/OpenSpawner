@@ -685,8 +685,26 @@ def api_user_containers():
     # Nur Templates anzeigen, deren Docker-Image lokal vorhanden ist
     container_mgr = ContainerManager()
     available_images = container_mgr.get_available_images()
+    configured_templates = current_app.config["CONTAINER_TEMPLATES"]
+
+    # Diagnose: a template without a locally built image is silently hidden from
+    # the dashboard. Log which images are missing so an empty dashboard is
+    # traceable in `docker logs backend`.
+    missing_images = [
+        t["image"] for t in configured_templates.values()
+        if t["image"] not in available_images
+    ]
+    if missing_images:
+        current_app.logger.warning(
+            "[SPAWNER] %d/%d template image(s) not found locally and hidden "
+            "from the dashboard: %s. Build them on the host (e.g. "
+            "`docker compose -f docker-compose.prod.yml --profile build build`).",
+            len(missing_images), len(configured_templates),
+            ", ".join(sorted(missing_images)),
+        )
+
     containers = []
-    for container_type, template in current_app.config["CONTAINER_TEMPLATES"].items():
+    for container_type, template in configured_templates.items():
         if template["image"] not in available_images:
             continue
         user_container = all_user_containers.get(container_type)

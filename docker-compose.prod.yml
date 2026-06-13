@@ -98,6 +98,52 @@ services:
     depends_on:
       - backend
 
+  # User container templates (built once on the host, spawned per user at
+  # runtime). These are build-only: the `build`/`default` profiles keep them
+  # out of `up`, so they never run as standalone services. The dashboard only
+  # lists templates whose image exists locally, so build them on the host:
+  #   docker compose -f docker-compose.prod.yml --profile default build   # core set
+  #   docker compose -f docker-compose.prod.yml --profile build build     # everything
+  template-nginx:
+    build: ./templates/software/nginx
+    image: template-nginx:latest
+    profiles: ["build", "default"]
+
+  template-nextjs:
+    build: ./templates/software/nextjs
+    image: template-nextjs:latest
+    profiles: ["build"]
+
+  template-dictionary:
+    build: ./templates/software/dictionary
+    image: template-dictionary:latest
+    profiles: ["build"]
+
+  template-vcoder:
+    build: ./templates/software/vcoder
+    image: template-vcoder:latest
+    profiles: ["build", "default"]
+
+  template-vscode:
+    build: ./templates/software/vscode
+    image: template-vscode:latest
+    profiles: ["build"]
+
+  template-office:
+    build: ./templates/software/office
+    image: template-office:latest
+    profiles: ["build"]
+
+  template-linuxmint:
+    build: ./templates/os/linuxmint
+    image: template-linuxmint:latest
+    profiles: ["build"]
+
+  template-mariadb:
+    build: ./templates/database/mariadb
+    image: template-mariadb:latest
+    profiles: ["build", "default"]
+
 # External network (must exist, created by Traefik)
 networks:
   web:
