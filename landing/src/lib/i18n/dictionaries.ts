@@ -13,9 +13,8 @@ const de = {
   },
 
   hero: {
-    titleLine1: "Eine eigene Umgebung für jeden Nutzer.",
-    titleLine2: "Gestartet per Klick, erreichbar unter eigener Subdomain.",
-    body: "OpenSpawner startet für jeden angemeldeten Nutzer einen eigenen Docker-Container. Die Anmeldung läuft über einen Link per E-Mail, ganz ohne Passwort. Vorlage aus dem Katalog wählen und loslegen.",
+    lead: "Gib jedem Nutzer seinen eigenen isolierten Container.",
+    body: "Gestartet per passwortlosem Magic Link, isoliert unter eigener Subdomain und automatisch aufgeräumt, sobald niemand ihn mehr braucht.",
     cta: "Auf GitHub ansehen",
   },
 
@@ -99,9 +98,8 @@ const en: Dictionary = {
   },
 
   hero: {
-    titleLine1: "A dedicated environment for every user.",
-    titleLine2: "Launched in one click, reachable on its own subdomain.",
-    body: "OpenSpawner starts a dedicated Docker container for every signed-in user. Sign-in works through a link sent by email, with no password at all. Pick a template from the catalog and get going.",
+    lead: "Give every user their own isolated container.",
+    body: "Spun up by a passwordless magic link, isolated on its own subdomain, and cleaned up automatically once nobody needs it.",
     cta: "View on GitHub",
   },
 
