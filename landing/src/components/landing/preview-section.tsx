@@ -1,8 +1,13 @@
+"use client";
+
 import Image from "next/image";
 
 import { FadeInView } from "@/components/animation/fade-in-view";
+import { useLocale } from "@/components/i18n/locale-provider";
 
 export function PreviewSection() {
+  const { dict } = useLocale();
+
   return (
     <section className="pb-16 md:pb-24">
       <div className="mx-auto w-full max-w-6xl px-4 lg:px-8">
@@ -19,7 +24,7 @@ export function PreviewSection() {
             </div>
             <Image
               src="/dashboard.png"
-              alt="Das OpenSpawner-Dashboard mit dem Vorlagen-Katalog, gruppiert nach Anwendungen, Betriebssystemen und Datenbanken."
+              alt={dict.preview.imageAlt}
               width={1920}
               height={1080}
               priority

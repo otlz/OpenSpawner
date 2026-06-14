@@ -3,6 +3,7 @@ import { PackageOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { GithubIcon } from "@/components/landing/github-icon";
+import { LanguageToggle } from "@/components/landing/language-toggle";
 import { GITHUB_URL, SITE_NAME } from "@/lib/site";
 
 export function LandingNavbar() {
@@ -16,12 +17,15 @@ export function LandingNavbar() {
           </span>
         </Link>
 
-        <Button variant="outline" asChild>
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-            <GithubIcon />
-            GitHub
-          </a>
-        </Button>
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <Button variant="outline" asChild>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+              <GithubIcon />
+              GitHub
+            </a>
+          </Button>
+        </div>
       </nav>
     </header>
   );

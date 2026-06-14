@@ -3,9 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { FadeInView } from "@/components/animation/fade-in-view";
 import { GithubIcon } from "@/components/landing/github-icon";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { GITHUB_URL } from "@/lib/site";
 
 export function CTASection() {
+  const { dict } = useLocale();
+
   return (
     <section className="relative py-32 md:py-48">
       {/* Full-width background that fades up into the page, like the reference
@@ -25,18 +28,14 @@ export function CTASection() {
       <div className="relative mx-auto w-full max-w-7xl px-4 lg:px-8">
         <FadeInView className="max-w-2xl">
           <h2 className="mb-4 text-2xl font-semibold tracking-tight md:text-3xl">
-            Bereit für die erste eigene Umgebung?
+            {dict.cta.heading}
           </h2>
-          <p className="text-muted-foreground">
-            Der komplette Quellcode liegt auf GitHub. Repository klonen, die
-            .env anpassen und mit Docker Compose starten. Nach ein paar Minuten
-            läuft die erste Instanz.
-          </p>
+          <p className="text-muted-foreground">{dict.cta.body}</p>
           <div className="mt-8">
             <Button size="lg" asChild>
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
                 <GithubIcon />
-                Zum Repository auf GitHub
+                {dict.cta.button}
               </a>
             </Button>
           </div>

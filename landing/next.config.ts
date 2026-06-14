@@ -1,17 +1,14 @@
 import type { NextConfig } from "next";
 
-// openspawner.de is the canonical origin. Every other domain pointed at this
-// app redirects there permanently so search engines index a single host.
-const CANONICAL_ORIGIN = "https://openspawner.de";
-
-const REDIRECT_HOSTS = [
-  "www.openspawner.de",
+// Each top-level domain serves the site directly and stays on its own host;
+// the language is chosen per visitor (cookie -> Accept-Language), not per TLD.
+// Only the "www." subdomain folds to the bare host of the SAME TLD so a single
+// canonical host per domain is indexed (e.g. www.openspawner.com -> openspawner.com).
+const BARE_HOSTS = [
+  "openspawner.de",
   "openspawner.com",
-  "www.openspawner.com",
   "openspawner.org",
-  "www.openspawner.org",
   "openspawner.net",
-  "www.openspawner.net",
 ];
 
 const nextConfig: NextConfig = {
@@ -25,10 +22,10 @@ const nextConfig: NextConfig = {
   },
 
   async redirects() {
-    return REDIRECT_HOSTS.map((host) => ({
+    return BARE_HOSTS.map((host) => ({
       source: "/:path*",
-      has: [{ type: "host" as const, value: host }],
-      destination: `${CANONICAL_ORIGIN}/:path*`,
+      has: [{ type: "host" as const, value: `www.${host}` }],
+      destination: `https://${host}/:path*`,
       permanent: true,
     }));
   },
