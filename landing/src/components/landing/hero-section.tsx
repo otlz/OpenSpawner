@@ -12,16 +12,14 @@ export function HeroSection() {
   return (
     <section className="relative pt-28 pb-12 md:pt-40 md:pb-16">
       <div className="mx-auto w-full max-w-7xl px-4 lg:px-8">
-        <FadeInView className="max-w-4xl">
-          <h1 className="text-5xl font-semibold tracking-tight sm:text-6xl lg:text-7xl">
+        <FadeInView className="max-w-5xl">
+          <h1 className="text-3xl leading-[1.1] font-semibold tracking-tight md:text-4xl lg:text-5xl">
             {SITE_NAME}
+            <br />
+            <span className="text-muted-foreground">{dict.hero.lead}</span>
           </h1>
 
-          <p className="mt-6 max-w-2xl text-xl font-medium tracking-tight text-balance md:text-2xl">
-            {dict.hero.lead}
-          </p>
-
-          <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">
+          <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
             {dict.hero.body}
           </p>
 
