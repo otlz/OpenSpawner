@@ -18,7 +18,9 @@ class Config:
 
     # JWT configuration
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
-    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))  # 1 hour
+    # 8 hours: also gates access to open user containers (forwardAuth), so it
+    # must outlast a school day's lessons
+    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 28800))
     JWT_TOKEN_LOCATION = ['cookies', 'headers']
     JWT_ACCESS_COOKIE_NAME = 'spawner_token'
     JWT_COOKIE_CSRF_PROTECT = False  # SameSite=Strict handles CSRF
@@ -168,6 +170,14 @@ class Config:
 
     # Full spawner URL
     SPAWNER_URL = f"{SPAWNER_SUBDOMAIN}.{BASE_DOMAIN}"
+
+    # Traefik forwardAuth endpoint guarding user containers (owner-only access).
+    # Uses a network alias unique to OpenSpawner: a generic name like "backend"
+    # can resolve to another stack's container on a shared Traefik network.
+    FORWARD_AUTH_URL = os.getenv(
+        'FORWARD_AUTH_URL',
+        'http://openspawner-backend:5000/api/auth/forward'
+    )
 
     # ========================================
     # Application Settings

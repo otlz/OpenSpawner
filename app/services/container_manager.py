@@ -58,7 +58,11 @@ class ContainerManager:
             f'traefik.http.routers.{router_name}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
             f'traefik.http.routers.{router_name}.priority': '100',
             f'traefik.http.routers.{router_name}.service': router_name,
-            f'traefik.http.routers.{router_name}.middlewares': f'{router_name}-strip',
+            # Auth runs first (sees the unstripped path), then the prefix is stripped
+            f'traefik.http.routers.{router_name}.middlewares': f'{router_name}-auth,{router_name}-strip',
+            f'traefik.http.middlewares.{router_name}-auth.forwardauth.address': Config.FORWARD_AUTH_URL,
+            # Traefik sets X-Forwarded-Uri itself; never trust a client-supplied one
+            f'traefik.http.middlewares.{router_name}-auth.forwardauth.trustForwardHeader': 'false',
             f'traefik.http.middlewares.{router_name}-strip.stripprefix.prefixes': f'/{path_slug}',
             f'traefik.http.routers.{router_name}.tls': 'true',
             f'traefik.http.routers.{router_name}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
@@ -76,17 +80,22 @@ class ContainerManager:
             labels['spawner.container_type'] = container_type
         return labels
 
-    def _connect_container_to_network(self, container, network_name, fatal=True):
-        """Verbindet einen Container mit dem angegebenen Docker-Netzwerk."""
+    def _get_container_network(self):
+        """Netzwerk, mit dem der Container erstellt wird (None = Docker-Standard-Bridge).
+
+        Traefik mode: the network must exist (the error aborts the spawn).
+        Local mode: falls back to the default bridge, the published port is enough.
+        """
+        if Config.TRAEFIK_ENABLED:
+            return Config.TRAEFIK_NETWORK
         try:
-            network = self._get_client().networks.get(network_name)
-            network.connect(container)
-            logger.info(f"[SPAWNER] Container connected to network '{network_name}'")
-        except Exception as e:
-            logger.warning(f"[SPAWNER] Could not connect container to network: {str(e)}")
-            if fatal:
-                container.remove(force=True)
-                raise Exception(f"Could not connect container to network '{network_name}': {str(e)}")
+            self._get_client().networks.get(Config.CONTAINER_NETWORK)
+            return Config.CONTAINER_NETWORK
+        except docker.errors.NotFound:
+            logger.warning(
+                f"[SPAWNER] Network '{Config.CONTAINER_NETWORK}' not found, using default bridge"
+            )
+            return None
 
     def _get_assigned_port(self, container):
         """Liest den vom Docker zugewiesenen Host-Port für Port 8080 aus."""
@@ -261,12 +270,12 @@ class ContainerManager:
             # Build named volumes from template config
             volumes = self._build_volumes(user_id, container_type, template.get('volumes', []))
 
-            # Environment variables for container
+            # Environment variables for container. Never pass secrets here: users
+            # have a shell in many templates and can read the environment.
             env_vars = {
                 'USER_ID': str(user_id),
                 'USER_SLUG': slug,
                 'CONTAINER_TYPE': container_type,
-                'JWT_SECRET': Config.SECRET_KEY
             }
 
             # linuxserver.io images need SUBFOLDER for reverse-proxy path prefixes
@@ -301,12 +310,13 @@ class ContainerManager:
                 cap_add=cap_add,
                 security_opt=['no-new-privileges:true'],
                 volumes=volumes,
-                ports=ports
+                ports=ports,
+                # Attach at creation, not via network.connect() afterwards: a
+                # container that briefly sits on the default bridge can be picked
+                # up by Traefik with its bridge IP (unreachable, 504), and the
+                # default bridge is shared with every other container on the host
+                network=self._get_container_network(),
             )
-
-            # Connect to network
-            network_name = Config.TRAEFIK_NETWORK if Config.TRAEFIK_ENABLED else Config.CONTAINER_NETWORK
-            self._connect_container_to_network(container, network_name, fatal=Config.TRAEFIK_ENABLED)
 
             # Warte bis Container bereit ist
             logger.info(f"[SPAWNER] Waiting for container startup...")

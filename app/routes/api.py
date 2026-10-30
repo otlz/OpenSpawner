@@ -2,12 +2,13 @@
 API-Blueprint für Authentifizierung, Benutzer- und Container-Verwaltung.
 """
 
-from flask import Blueprint, jsonify, request, current_app, make_response
+from flask import Blueprint, jsonify, request, current_app, make_response, redirect
 from flask_jwt_extended import (
     create_access_token,
     jwt_required,
     get_jwt_identity,
     get_jwt,
+    verify_jwt_in_request,
 )
 from datetime import timedelta, datetime
 from app.models import db, User, UserState, UserRole, MagicLinkToken, UserContainer
@@ -45,6 +46,9 @@ def _get_current_user():
     user = User.query.get(int(user_id))
     if not user:
         return None, (jsonify({"error": "User not found"}), 404)
+    # A blocked user's JWT stays valid until it expires, so check on every request
+    if user.is_blocked:
+        return None, (jsonify({"error": "Your account has been suspended"}), 403)
     return user, None
 
 
@@ -111,8 +115,11 @@ def _create_auth_response(access_token, user_data, expires_in):
 
     response = make_response(jsonify(response_data))
 
-    # HttpOnly: no JS access, Secure: HTTPS only (except localhost), SameSite: CSRF protection
+    # HttpOnly: no JS access, Secure: HTTPS only (except localhost), SameSite: CSRF protection.
+    # Host-only (no domain): a ".BASE_DOMAIN" cookie would be sent to every other
+    # site on the school's domain.
     is_localhost = Config.BASE_DOMAIN == "localhost"
+    _delete_legacy_cookie(response)
     response.set_cookie(
         "spawner_token",
         access_token,
@@ -121,10 +128,17 @@ def _create_auth_response(access_token, user_data, expires_in):
         secure=not is_localhost,
         samesite="Strict",
         path="/",
-        domain=None if is_localhost else f".{Config.BASE_DOMAIN}",
     )
 
     return response
+
+
+def _delete_legacy_cookie(response):
+    """Removes the old domain-wide cookie that earlier versions set."""
+    if Config.BASE_DOMAIN != "localhost":
+        response.delete_cookie(
+            "spawner_token", path="/", domain=f".{Config.BASE_DOMAIN}"
+        )
 
 
 @api_bp.route("/auth/login", methods=["POST"])
@@ -417,12 +431,61 @@ def api_logout():
     response.delete_cookie(
         "spawner_token",
         path="/",
-        domain=None if is_localhost else f".{Config.BASE_DOMAIN}",
         samesite="Strict",
         secure=not is_localhost,
     )
+    _delete_legacy_cookie(response)
 
     return response, 200
+
+
+@api_bp.route(
+    "/auth/forward",
+    methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
+def api_forward_auth():
+    """Traefik forwardAuth: only the owner may reach a user container.
+
+    Traefik calls this for every request to /<slug>-<type>/... with the
+    browser's cookies and the original path in X-Forwarded-Uri. Any non-2xx
+    response is returned to the browser instead of the container's.
+    """
+    try:
+        verify_jwt_in_request(locations=["cookies"])
+        user = User.query.get(int(get_jwt_identity()))
+    except Exception:
+        user = None
+
+    if not user:
+        return redirect(f"{Config.FRONTEND_URL}/login")
+    if user.is_blocked:
+        return jsonify({"error": "Your account has been suspended"}), 403
+
+    # Exact match on the first path segment: a prefix check would let slug "abc"
+    # open "abc-x..." containers of a user whose slug happens to start with "abc-"
+    path_slug = request.headers.get("X-Forwarded-Uri", "").lstrip("/")
+    path_slug = path_slug.split("/", 1)[0].split("?", 1)[0]
+    container_type = path_slug.removeprefix(f"{user.slug}-")
+    if (
+        container_type == path_slug
+        or container_type not in current_app.config["CONTAINER_TEMPLATES"]
+    ):
+        return jsonify({"error": "Access denied"}), 403
+
+    # Using the container counts as activity, so the reaper doesn't stop it while
+    # the dashboard tab is closed. Throttled: Traefik calls this per request.
+    user_container = UserContainer.query.filter_by(
+        user_id=user.id, container_type=container_type
+    ).first()
+    now = datetime.utcnow()
+    if user_container and (
+        not user_container.last_used
+        or now - user_container.last_used > timedelta(minutes=1)
+    ):
+        user_container.last_used = now
+        db.session.commit()
+
+    return "", 204
 
 
 @api_bp.route("/user/me", methods=["GET"])

@@ -23,7 +23,11 @@ services:
       - TRAEFIK_ENABLED=true
 
     networks:
-      - web
+      web:
+        # Unique name for Traefik's forwardAuth calls (FORWARD_AUTH_URL);
+        # "backend" alone may also resolve to other stacks on this network
+        aliases:
+          - openspawner-backend
 
     labels:
       # Traefik routing

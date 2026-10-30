@@ -29,7 +29,7 @@
 - Passwordless login via magic links (no password, no OAuth provider)
 - Per-user Docker container spawned from a catalog of templates
 - Built-in catalog: VS Code, Next.js, MariaDB, PlatformIO, LibreOffice, full Linux desktop, and more
-- JWT auth via `HttpOnly` cookie; each container validates independently
+- JWT auth via `HttpOnly` cookie; Traefik forwardAuth lets only the owner open a container
 - Automatic idle shutdown and stale cleanup (user volumes preserved)
 - Production-ready with Traefik reverse proxy and Let's Encrypt
 
@@ -247,7 +247,7 @@ OpenSpawner/
 - **Port 3000 or 5000 already in use** → stop the other process, or change `SPAWNER_PORT` in `.env`.
 - **Magic link email never arrives** → expected without SMTP; grab it from `docker compose logs spawner | grep magic`.
 - **`network web not found` on `docker-compose.prod.yml`** → run `docker network create web`.
-- **User container returns 403** → JWT cookie missing or expired; log out and back in.
+- **User container returns 403** → only the container's owner can open it, admins included. A redirect to the login page means the session expired; log in again.
 - **`template-nextjs` build looks stuck** → it runs `npm install` + build inside the container; allow 2 to 5 minutes on the first build.
 
 ## License & Authors
