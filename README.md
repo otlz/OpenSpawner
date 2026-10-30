@@ -29,6 +29,7 @@
 - Passwordless login via magic links (no password, no OAuth provider)
 - Per-user Docker container spawned from a catalog of templates
 - Built-in catalog: VS Code, Next.js, MariaDB, PlatformIO, LibreOffice, full Linux desktop, and more
+- AI coding template: VS Code with GitHub Copilot, Claude Code, Codex and OpenCode for Next.js, PHP and Python
 - JWT auth via `HttpOnly` cookie; Traefik forwardAuth lets only the owner open a container
 - Automatic idle shutdown and stale cleanup (user volumes preserved)
 - Production-ready with Traefik reverse proxy and Let's Encrypt
@@ -166,6 +167,7 @@ OpenSpawner ships with a catalog of ready-to-run container templates, organized 
 | `template-dictionary` | Store words and definitions locally |
 | `template-vcoder` | PlatformIO IDE for ESP8266 and Wemos |
 | `template-vscode` | Code Server with extension management |
+| `template-dev` | VS Code with AI agents (Copilot, Claude Code, Codex, OpenCode), Node.js, PHP, Python |
 | `template-office` | Writer, Calc, and Impress in the browser |
 
 **Operating systems**

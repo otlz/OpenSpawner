@@ -98,6 +98,11 @@ services:
     image: template-vscode:latest
     profiles: ["build"]
 
+  template-dev:
+    build: ./templates/software/dev
+    image: template-dev:latest
+    profiles: ["build", "default"]
+
   template-office:
     build: ./templates/software/office
     image: template-office:latest

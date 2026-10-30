@@ -1,0 +1,6 @@
+# Codex's own sandbox (bubblewrap) needs user namespaces, which the hardened
+# spawner container does not allow. The container itself is the sandbox
+# (unprivileged user, no-new-privileges, resource limits), so Codex runs
+# commands directly and still asks before anything it considers risky.
+sandbox_mode = "danger-full-access"
+approval_policy = "on-request"

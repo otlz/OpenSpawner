@@ -99,6 +99,25 @@
       "default": false
     },
     {
+      "type": "template-dev",
+      "image": "template-dev:latest",
+      "category": "software",
+      "build_context": "templates/software/dev",
+      "display_name": "KI-Coding",
+      "description": "VS Code mit Copilot, Claude Code, Codex und OpenCode für Next.js, PHP und Python",
+      "os": "Debian",
+      "software": "Node.js 24, PHP 8, Python 3",
+      "icon": "SiVisualstudiocode",
+      "port": 8080,
+      "volumes": [
+        { "name_suffix": "home", "mount_path": "/home/coder" }
+      ],
+      "memory_limit": "3g",
+      "cpu_quota": 100000,
+      "pids_limit": 1024,
+      "default": true
+    },
+    {
       "type": "template-office",
       "image": "template-office:latest",
       "category": "software",

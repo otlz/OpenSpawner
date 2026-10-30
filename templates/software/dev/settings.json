@@ -1,0 +1,16 @@
+{
+  "workbench.startupEditor": "none",
+  "workbench.colorTheme": "Default Dark Modern",
+  "telemetry.telemetryLevel": "off",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/__pycache__": true,
+    "**/.venv": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/.venv/**": true
+  }
+}
