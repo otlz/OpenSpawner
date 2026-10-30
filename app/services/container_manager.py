@@ -184,6 +184,27 @@ class ContainerManager:
             except Exception as e:
                 logger.warning(f"[SPAWNER] Could not remove volume {vol_name}: {str(e)}")
 
+    def remove_unprotected_containers(self):
+        """Entfernt Benutzer-Container ohne forwardAuth-Middleware (Traefik-Modus).
+
+        Containers created before owner-only access are reachable without login
+        and carry the old SECRET_KEY in their env; restarting keeps both. Volumes
+        are kept, the next launch creates a fresh container.
+
+        Returns:
+            Number of containers removed.
+        """
+        removed = 0
+        containers = self._get_client().containers.list(
+            all=True, filters={'label': 'spawner.user_id'}
+        )
+        for container in containers:
+            if not any(key.endswith('-auth.forwardauth.address') for key in container.labels):
+                container.remove(force=True)
+                removed += 1
+                logger.info(f"[SPAWNER] Removed unprotected container {container.name}")
+        return removed
+
     def get_container_status(self, container_id):
         """Gibt den Status eines Containers zurück (running, stopped, not_found, etc.)."""
         try:

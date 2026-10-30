@@ -173,6 +173,16 @@ def create_app():
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         from app.services.container_reaper import ContainerReaper
 
+        if Config.TRAEFIK_ENABLED:
+            try:
+                removed = ContainerManager().remove_unprotected_containers()
+                if removed:
+                    app.logger.info(
+                        f"[SPAWNER] Removed {removed} containers without forwardAuth"
+                    )
+            except Exception as e:
+                app.logger.warning(f"[SPAWNER] Unprotected container cleanup failed: {e}")
+
         reaper = ContainerReaper(app)
         app.config["SCHEDULER_API_ENABLED"] = False
 

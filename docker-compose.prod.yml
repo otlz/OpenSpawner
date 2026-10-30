@@ -102,10 +102,29 @@ services:
     depends_on:
       - backend
 
-  # User container templates (built once on the host, spawned per user at
-  # runtime). These are build-only: the `build`/`default` profiles keep them
-  # out of `up`, so they never run as standalone services. The dashboard only
-  # lists templates whose image exists locally, so build them on the host:
+  # Builds the template images on the host at every deploy, so no SSH is
+  # needed (Dokploy only runs `up`). Runs once in the background and exits;
+  # unchanged templates come from the build cache in seconds. The first run
+  # takes 10 to 20 minutes. Set TEMPLATE_PROFILE=build for the whole catalog.
+  build-templates:
+    image: docker:28-cli
+    restart: "no"
+    working_dir: /src
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/src:ro
+    environment:
+      - TEMPLATE_PROFILE=${TEMPLATE_PROFILE:-default}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        docker compose -f docker-compose.prod.yml --profile "$$TEMPLATE_PROFILE" build
+        $$(docker compose -f docker-compose.prod.yml --profile "$$TEMPLATE_PROFILE" config --services | grep '^template-')
+
+  # User container templates (spawned per user at runtime). These are
+  # build-only: the `build`/`default` profiles keep them out of `up`, so they
+  # never run as standalone services. build-templates above builds them; by
+  # hand on the host:
   #   docker compose -f docker-compose.prod.yml --profile default build   # core set
   #   docker compose -f docker-compose.prod.yml --profile build build     # everything
   template-nginx:
