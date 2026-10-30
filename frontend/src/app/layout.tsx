@@ -10,6 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "OpenSpawner",
   description: "Deine persönliche Container-Plattform",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

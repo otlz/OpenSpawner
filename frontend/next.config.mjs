@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  async headers() {
+    // Internal platform: keep every page out of search engines
+    return [
+      {
+        source: '/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+    ];
+  },
   async rewrites() {
     // INTERNAL_API_URL is for server-side rewrites (Docker networking)
     // Falls back to localhost:5000 for local development

@@ -59,7 +59,11 @@ class ContainerManager:
             f'traefik.http.routers.{router_name}.priority': '100',
             f'traefik.http.routers.{router_name}.service': router_name,
             # Auth runs first (sees the unstripped path), then the prefix is stripped
-            f'traefik.http.routers.{router_name}.middlewares': f'{router_name}-auth,{router_name}-strip',
+            f'traefik.http.routers.{router_name}.middlewares':
+                f'{router_name}-auth,{router_name}-noindex,{router_name}-strip',
+            # User apps live on the school's official host: keep them out of search engines
+            f'traefik.http.middlewares.{router_name}-noindex.headers.customresponseheaders.X-Robots-Tag':
+                'noindex, nofollow',
             f'traefik.http.middlewares.{router_name}-auth.forwardauth.address': Config.FORWARD_AUTH_URL,
             # Traefik sets X-Forwarded-Uri itself; never trust a client-supplied one
             f'traefik.http.middlewares.{router_name}-auth.forwardauth.trustForwardHeader': 'false',

@@ -91,6 +91,12 @@ def create_app():
     def missing_token_callback(error):
         return jsonify({"error": "Authentication required"}), 401
 
+    @app.after_request
+    def add_noindex_header(response):
+        """Internal platform: keep API responses out of search engines."""
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
     # Configure logging
     log_file = app.config.get("LOG_FILE", "/app/logs/spawner.log")
     log_dir = os.path.dirname(log_file)
