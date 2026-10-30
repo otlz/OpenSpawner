@@ -122,6 +122,7 @@ class Config:
                     'cpu_quota': config_meta.get('cpu_quota', cls.DEFAULT_CPU_QUOTA),
                     'pids_limit': config_meta.get('pids_limit', 100),
                     'cap_add': config_meta.get('cap_add', []),
+                    'strip_prefix': config_meta.get('strip_prefix', True),
                     'category': config_meta.get('category', 'software'),
                 }
         else:
@@ -142,6 +143,7 @@ class Config:
                     'cpu_quota': cls.DEFAULT_CPU_QUOTA,
                     'pids_limit': 100,
                     'cap_add': [],
+                    'strip_prefix': True,
                     'category': 'software',
                 }
 
@@ -170,6 +172,12 @@ class Config:
 
     # Full spawner URL
     SPAWNER_URL = f"{SPAWNER_SUBDOMAIN}.{BASE_DOMAIN}"
+
+    # Traefik mode: every user gets an own network shared only with Traefik.
+    # Each takes a /28 block of this range (must not overlap other networks).
+    USER_NETWORK_SUBNET = os.getenv('USER_NETWORK_SUBNET', '10.213.0.0/16')
+    # Traefik container to attach to user networks (auto-detected when empty)
+    TRAEFIK_CONTAINER = os.getenv('TRAEFIK_CONTAINER', '')
 
     # Traefik forwardAuth endpoint guarding user containers (owner-only access).
     # Uses a network alias unique to OpenSpawner: a generic name like "backend"

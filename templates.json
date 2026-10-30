@@ -135,6 +135,7 @@
       "cpu_quota": 50000,
       "pids_limit": 256,
       "cap_add": ["FOWNER", "DAC_OVERRIDE", "SYS_CHROOT"],
+      "strip_prefix": false,
       "default": false
     },
     {
@@ -155,6 +156,7 @@
       "cpu_quota": 100000,
       "pids_limit": 256,
       "cap_add": ["FOWNER", "DAC_OVERRIDE", "SYS_CHROOT"],
+      "strip_prefix": false,
       "default": false
     },
     {

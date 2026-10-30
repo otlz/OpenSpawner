@@ -31,6 +31,8 @@
 - Built-in catalog: VS Code, Next.js, MariaDB, PlatformIO, LibreOffice, full Linux desktop, and more
 - AI coding template: VS Code with GitHub Copilot, Claude Code, Codex and OpenCode for Next.js, PHP and Python
 - JWT auth via `HttpOnly` cookie; Traefik forwardAuth lets only the owner open a container
+- Each user's containers run on their own Docker network: no access to other users, the backend or other apps on the server
+- Not indexed by search engines (`robots.txt`, `X-Robots-Tag`), including user apps
 - Automatic idle shutdown and stale cleanup (user volumes preserved)
 - Production-ready with Traefik reverse proxy and Let's Encrypt
 

@@ -65,6 +65,18 @@ class ContainerReaper:
             if stopped:
                 self.app.logger.info(f"[REAPER] Stopped {stopped} idle containers")
 
+    def reattach_traefik(self):
+        """Verbindet Traefik wieder mit allen Benutzer-Netzwerken (Traefik-Modus).
+
+        Wird alle REAPER_INTERVAL Sekunden aufgerufen.
+        """
+        try:
+            attached = ContainerManager().attach_traefik_to_user_networks()
+            if attached:
+                self.app.logger.info(f"[REAPER] Re-attached Traefik to {attached} user networks")
+        except Exception as e:
+            self.app.logger.warning(f"[REAPER] Could not attach Traefik to user networks: {str(e)}")
+
     def reap_stale_containers(self):
         """Entfernt gestoppte Container, die länger als CONTAINER_STALE_TIMEOUT inaktiv sind.
 

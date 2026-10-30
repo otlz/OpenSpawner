@@ -411,6 +411,11 @@ def delete_user(user_id):
         template = Config.CONTAINER_TEMPLATES.get(container.container_type, {})
         container_mgr.remove_volumes(container.user_id, container.container_type, template.get('volumes', []))
 
+    try:
+        container_mgr.remove_user_network(user.id)
+    except Exception as e:
+        current_app.logger.warning(f"Network of user {user.id} could not be removed: {str(e)}")
+
     # 2. Delete MagicLinkTokens (GDPR: IP addresses)
     magic_tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
     for token in magic_tokens:

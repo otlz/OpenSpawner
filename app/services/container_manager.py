@@ -1,4 +1,5 @@
 """Container-Verwaltung für Docker-basierte Benutzer-Container."""
+import ipaddress
 import logging
 import time
 import docker
@@ -49,29 +50,150 @@ class ContainerManager:
         router_name = f"user{user_id}" if not container_type else f"user{user_id}-{container_type}"
         path_slug = slug if not container_type else f"{slug}-{container_type}"
 
-        return {
+        # linuxserver.io images serve under SUBFOLDER themselves and need the full path
+        template = Config.CONTAINER_TEMPLATES.get(container_type) or {}
+        strip_prefix = template.get('strip_prefix', True)
+
+        # Auth runs first (sees the unstripped path), then the prefix is stripped
+        middlewares = [f'{router_name}-auth', f'{router_name}-noindex']
+        if strip_prefix:
+            middlewares.append(f'{router_name}-strip')
+
+        labels = {
             'traefik.enable': 'true',
-            'traefik.docker.network': Config.TRAEFIK_NETWORK,
+            'traefik.docker.network': self._user_network_name(user_id),
 
             f'traefik.http.routers.{router_name}.rule':
                 f'Host(`{base_host}`) && PathPrefix(`/{path_slug}`)',
             f'traefik.http.routers.{router_name}.entrypoints': Config.TRAEFIK_ENTRYPOINT,
             f'traefik.http.routers.{router_name}.priority': '100',
             f'traefik.http.routers.{router_name}.service': router_name,
-            # Auth runs first (sees the unstripped path), then the prefix is stripped
-            f'traefik.http.routers.{router_name}.middlewares':
-                f'{router_name}-auth,{router_name}-noindex,{router_name}-strip',
+            f'traefik.http.routers.{router_name}.middlewares': ','.join(middlewares),
             # User apps live on the school's official host: keep them out of search engines
             f'traefik.http.middlewares.{router_name}-noindex.headers.customresponseheaders.X-Robots-Tag':
                 'noindex, nofollow',
             f'traefik.http.middlewares.{router_name}-auth.forwardauth.address': Config.FORWARD_AUTH_URL,
             # Traefik sets X-Forwarded-Uri itself; never trust a client-supplied one
             f'traefik.http.middlewares.{router_name}-auth.forwardauth.trustForwardHeader': 'false',
-            f'traefik.http.middlewares.{router_name}-strip.stripprefix.prefixes': f'/{path_slug}',
             f'traefik.http.routers.{router_name}.tls': 'true',
             f'traefik.http.routers.{router_name}.tls.certresolver': Config.TRAEFIK_CERTRESOLVER,
             f'traefik.http.services.{router_name}.loadbalancer.server.port': '8080',
         }
+        if strip_prefix:
+            labels[f'traefik.http.middlewares.{router_name}-strip.stripprefix.prefixes'] = f'/{path_slug}'
+        return labels
+
+    @staticmethod
+    def _user_network_name(user_id):
+        """Name des eigenen Netzwerks eines Benutzers (Traefik-Modus)."""
+        return f"spawner-user{user_id}"
+
+    @staticmethod
+    def _user_subnet(user_id):
+        """Fester /28-Block pro Benutzer aus USER_NETWORK_SUBNET.
+
+        Explicit subnets: Docker's default address pools only hold about 30
+        networks, and every compose project on the host already takes one.
+        """
+        pool = ipaddress.ip_network(Config.USER_NETWORK_SUBNET)
+        if user_id >= pool.num_addresses // 16:
+            raise Exception(f"USER_NETWORK_SUBNET {pool} has no room for user {user_id}")
+        return ipaddress.ip_network((int(pool.network_address) + user_id * 16, 28))
+
+    def _find_traefik_container(self):
+        """Findet den Traefik-Container, der OpenSpawner routet.
+
+        Returns:
+            (container_id, uses_host_network)
+        """
+        api = self._get_client().api
+        if Config.TRAEFIK_CONTAINER:
+            info = api.inspect_container(Config.TRAEFIK_CONTAINER)
+            return info['Id'], info['HostConfig'].get('NetworkMode') == 'host'
+
+        # The Traefik that routes our backend sits on TRAEFIK_NETWORK
+        candidates = [
+            c for c in api.containers(filters={'network': Config.TRAEFIK_NETWORK})
+            if c.get('Image', '').split('@')[0].split(':')[0].split('/')[-1] == 'traefik'
+            or (c.get('Labels') or {}).get('org.opencontainers.image.title', '').lower() == 'traefik'
+        ]
+        if len(candidates) != 1:
+            raise Exception(
+                f"Found {len(candidates)} Traefik containers on '{Config.TRAEFIK_NETWORK}', "
+                "set TRAEFIK_CONTAINER"
+            )
+        return candidates[0]['Id'], candidates[0]['HostConfig'].get('NetworkMode') == 'host'
+
+    def _ensure_user_network(self, user_id):
+        """Erstellt das eigene Netzwerk eines Benutzers und hängt Traefik an.
+
+        Only the user's containers and Traefik share it: no other users, no
+        backend, none of the other apps on the Traefik network.
+        """
+        client = self._get_client()
+        name = self._user_network_name(user_id)
+        try:
+            network = client.networks.get(name)
+        except docker.errors.NotFound:
+            try:
+                network = client.networks.create(
+                    name,
+                    driver='bridge',
+                    ipam=docker.types.IPAMConfig(
+                        pool_configs=[docker.types.IPAMPool(subnet=str(self._user_subnet(user_id)))]
+                    ),
+                    labels={'spawner.managed': 'true', 'spawner.user_id': str(user_id)},
+                )
+                logger.info(f"[SPAWNER] Network {name} created")
+            except docker.errors.APIError:
+                # Created concurrently by a parallel launch of the same user
+                network = client.networks.get(name)
+
+        traefik_id, host_network = self._find_traefik_container()
+        if not host_network:
+            network.reload()
+            self._attach_traefik(network, traefik_id)
+        return name
+
+    @staticmethod
+    def _attach_traefik(network, traefik_id):
+        """Verbindet Traefik mit einem Benutzer-Netzwerk, falls noch nicht geschehen."""
+        if traefik_id in (network.attrs.get('Containers') or {}):
+            return False
+        network.connect(traefik_id)
+        logger.info(f"[SPAWNER] Traefik connected to {network.name}")
+        return True
+
+    def attach_traefik_to_user_networks(self):
+        """Hängt Traefik an alle Benutzer-Netzwerke an.
+
+        A recreated Traefik container (e.g. after a Dokploy update) loses these
+        connections, which makes every running user container unreachable.
+
+        Returns:
+            Number of networks Traefik was attached to.
+        """
+        traefik_id, host_network = self._find_traefik_container()
+        if host_network:
+            return 0
+        networks = self._get_client().networks.list(
+            filters={'label': 'spawner.user_id'}, greedy=True
+        )
+        return sum(self._attach_traefik(network, traefik_id) for network in networks)
+
+    def remove_user_network(self, user_id):
+        """Entfernt das Netzwerk eines Benutzers (inkl. Traefik-Anbindung)."""
+        try:
+            network = self._get_client().networks.get(self._user_network_name(user_id))
+        except docker.errors.NotFound:
+            return
+        for container_id in list(network.attrs.get('Containers') or {}):
+            try:
+                network.disconnect(container_id, force=True)
+            except Exception as e:
+                logger.warning(f"[SPAWNER] Could not disconnect {container_id[:12]}: {str(e)}")
+        network.remove()
+        logger.info(f"[SPAWNER] Network {network.name} removed")
 
     def _build_metadata_labels(self, user_id, slug, container_type=None):
         """Erstellt Spawner-Metadaten-Labels für Container-Zuordnung."""
@@ -84,14 +206,14 @@ class ContainerManager:
             labels['spawner.container_type'] = container_type
         return labels
 
-    def _get_container_network(self):
+    def _get_container_network(self, user_id):
         """Netzwerk, mit dem der Container erstellt wird (None = Docker-Standard-Bridge).
 
-        Traefik mode: the network must exist (the error aborts the spawn).
+        Traefik mode: the user's own network (see _ensure_user_network).
         Local mode: falls back to the default bridge, the published port is enough.
         """
         if Config.TRAEFIK_ENABLED:
-            return Config.TRAEFIK_NETWORK
+            return self._ensure_user_network(user_id)
         try:
             self._get_client().networks.get(Config.CONTAINER_NETWORK)
             return Config.CONTAINER_NETWORK
@@ -188,12 +310,14 @@ class ContainerManager:
             except Exception as e:
                 logger.warning(f"[SPAWNER] Could not remove volume {vol_name}: {str(e)}")
 
-    def remove_unprotected_containers(self):
-        """Entfernt Benutzer-Container ohne forwardAuth-Middleware (Traefik-Modus).
+    def remove_outdated_containers(self):
+        """Entfernt Benutzer-Container mit veralteten Traefik-Labels (Traefik-Modus).
 
-        Containers created before owner-only access are reachable without login
-        and carry the old SECRET_KEY in their env; restarting keeps both. Volumes
-        are kept, the next launch creates a fresh container.
+        Labels are fixed at creation, a restart keeps them. This catches
+        containers from before owner-only access (no login, old SECRET_KEY in
+        env), before per-user networks (on the shared Traefik network) and any
+        later routing change. Volumes are kept, the next launch creates a
+        fresh container.
 
         Returns:
             Number of containers removed.
@@ -203,11 +327,37 @@ class ContainerManager:
             all=True, filters={'label': 'spawner.user_id'}
         )
         for container in containers:
-            if not any(key.endswith('-auth.forwardauth.address') for key in container.labels):
+            labels = container.labels
+            expected = self._build_traefik_labels(
+                labels['spawner.user_id'],
+                labels.get('spawner.slug', ''),
+                labels.get('spawner.container_type'),
+            )
+            current = {k: v for k, v in labels.items() if k.startswith('traefik.')}
+            if current != expected:
                 container.remove(force=True)
                 removed += 1
-                logger.info(f"[SPAWNER] Removed unprotected container {container.name}")
+                logger.info(f"[SPAWNER] Removed outdated container {container.name}")
         return removed
+
+    def wait_until_listening(self, container_id, port=8080, timeout=20):
+        """Wartet bis im Container ein Prozess auf dem Port lauscht.
+
+        Reads /proc/net/tcp inside the container, so it works without network
+        access to the isolated user network and without curl in the image.
+        """
+        container = self._get_client().containers.get(container_id)
+        local_port = f":{port:04X}"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            result = container.exec_run(['cat', '/proc/net/tcp', '/proc/net/tcp6'])
+            for line in result.output.decode(errors='ignore').splitlines():
+                fields = line.split()
+                # local_address ends with the hex port, state 0A = LISTEN
+                if len(fields) > 3 and fields[1].endswith(local_port) and fields[3] == '0A':
+                    return True
+            time.sleep(0.5)
+        return False
 
     def get_container_status(self, container_id):
         """Gibt den Status eines Containers zurück (running, stopped, not_found, etc.)."""
@@ -340,7 +490,7 @@ class ContainerManager:
                 # container that briefly sits on the default bridge can be picked
                 # up by Traefik with its bridge IP (unreachable, 504), and the
                 # default bridge is shared with every other container on the host
-                network=self._get_container_network(),
+                network=self._get_container_network(user_id),
             )
 
             # Warte bis Container bereit ist

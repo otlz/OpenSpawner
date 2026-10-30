@@ -25,7 +25,6 @@ from config import Config
 import re
 import os
 import uuid
-import socket
 import time
 from werkzeug.utils import secure_filename
 
@@ -867,19 +866,9 @@ def api_container_launch(container_type):
         # Warten bis der Dienst im Container antwortet und Traefik die Route
         # übernommen hat — sonst läuft der erste "Öffnen"-Klick in die Frontend-404.
         try:
-            client = ContainerManager()._get_client()
-            cont = client.containers.get(uc.container_id)
-            ip = cont.attrs["NetworkSettings"]["Networks"].get(
-                Config.TRAEFIK_NETWORK, {}
-            ).get("IPAddress")
-            deadline = time.time() + 20
-            while ip and time.time() < deadline:
-                try:
-                    with socket.create_connection((ip, 8080), timeout=1):
-                        break
-                except OSError:
-                    time.sleep(0.5)
-            time.sleep(2.5)  # Traefik Route-Propagation (providersThrottleDuration)
+            ContainerManager().wait_until_listening(uc.container_id)
+            if Config.TRAEFIK_ENABLED:
+                time.sleep(2.5)  # Traefik Route-Propagation (providersThrottleDuration)
         except Exception:
             pass  # best-effort: lieber etwas früher öffnen als den Launch blockieren
     except Exception as e:

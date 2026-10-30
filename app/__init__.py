@@ -181,13 +181,13 @@ def create_app():
 
         if Config.TRAEFIK_ENABLED:
             try:
-                removed = ContainerManager().remove_unprotected_containers()
+                removed = ContainerManager().remove_outdated_containers()
                 if removed:
                     app.logger.info(
-                        f"[SPAWNER] Removed {removed} containers without forwardAuth"
+                        f"[SPAWNER] Removed {removed} containers with outdated routing"
                     )
             except Exception as e:
-                app.logger.warning(f"[SPAWNER] Unprotected container cleanup failed: {e}")
+                app.logger.warning(f"[SPAWNER] Outdated container cleanup failed: {e}")
 
         reaper = ContainerReaper(app)
         app.config["SCHEDULER_API_ENABLED"] = False
@@ -205,6 +205,14 @@ def create_app():
             trigger="interval",
             seconds=3600,
         )
+        if Config.TRAEFIK_ENABLED:
+            reaper.reattach_traefik()
+            scheduler.add_job(
+                id="reattach_traefik",
+                func=reaper.reattach_traefik,
+                trigger="interval",
+                seconds=Config.REAPER_INTERVAL,
+            )
         scheduler.start()
         app.logger.info(
             f"[REAPER] Started (idle={Config.CONTAINER_IDLE_TIMEOUT}s, "
