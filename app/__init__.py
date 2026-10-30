@@ -163,6 +163,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         _migrate_is_admin_to_role(app)
+        _migrate_drop_is_admin(app)
         _migrate_add_container_status(app)
         _migrate_add_avatar(app)
         app.logger.info("Database tables created")
@@ -249,6 +250,24 @@ def _migrate_is_admin_to_role(app):
             )
             conn.commit()
         app.logger.info("[MIGRATION] Added role column")
+
+
+def _migrate_drop_is_admin(app):
+    """Migration: Drop legacy is_admin column once role exists.
+
+    The model no longer writes is_admin, so its NOT NULL constraint makes
+    every new signup fail on databases that went through the role migration.
+    """
+    inspector = sa_inspect(db.engine)
+    columns = [c["name"] for c in inspector.get_columns("user")]
+
+    if "is_admin" not in columns or "role" not in columns:
+        return  # Nothing to drop (or role migration has not run yet)
+
+    with db.engine.connect() as conn:
+        conn.execute(text("ALTER TABLE user DROP COLUMN is_admin"))
+        conn.commit()
+    app.logger.info("[MIGRATION] Dropped legacy is_admin column from user")
 
 
 def _migrate_add_avatar(app):
