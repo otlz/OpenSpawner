@@ -91,7 +91,8 @@
       "icon": "SiVisualstudiocode",
       "port": 8080,
       "volumes": [
-        { "name_suffix": "workspace", "mount_path": "/home/coder/project" }
+        { "name_suffix": "workspace", "mount_path": "/home/coder/project" },
+        { "name_suffix": "config", "mount_path": "/home/coder/.config" }
       ],
       "memory_limit": "512m",
       "cpu_quota": 50000,
