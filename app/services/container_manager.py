@@ -310,6 +310,38 @@ class ContainerManager:
             except Exception as e:
                 logger.warning(f"[SPAWNER] Could not remove volume {vol_name}: {str(e)}")
 
+    def purge_user_resources(self, user_id):
+        """Entfernt alle Container, Volumes und das Netzwerk einer Benutzer-ID.
+
+        SQLite gives the ID of a deleted newest user to the next signup, and
+        volumes are named by ID: anything left behind (files, GitHub logins)
+        would go to the next student. Works from labels and name prefixes, not
+        the DB records: those miss volumes kept by a container delete and
+        templates removed from the catalog.
+
+        Raises on failure, so callers can refuse to hand out the ID.
+
+        Returns:
+            Number of containers removed.
+        """
+        client = self._get_client()
+        containers = client.containers.list(
+            all=True, filters={'label': f'spawner.user_id={user_id}'}
+        )
+        for container in containers:
+            container.remove(force=True)
+            logger.info(f"[SPAWNER] Container {container.name} purged")
+
+        # Docker's name filter is a substring match, hence the startswith
+        prefix = f"spawner-user{user_id}-"
+        for volume in client.volumes.list(filters={'name': prefix}):
+            if volume.name.startswith(prefix):
+                volume.remove(force=True)
+                logger.info(f"[SPAWNER] Volume {volume.name} purged")
+
+        self.remove_user_network(user_id)
+        return len(containers)
+
     def remove_outdated_containers(self):
         """Entfernt Benutzer-Container mit veralteten Traefik-Labels (Traefik-Modus).
 

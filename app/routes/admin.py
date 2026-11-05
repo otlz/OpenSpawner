@@ -393,28 +393,15 @@ def delete_user(user_id):
         'takeover_sessions_deleted': 0
     }
 
-    # 1. Delete all Docker containers and their volumes
-    # Use manager directly (not orchestrator.destroy) because cascade='all, delete-orphan'
-    # on User.containers handles DB deletion when user is deleted below
-    container_mgr = ContainerManager()
-    for container in user.containers:
-        if container.container_id:
-            try:
-                container_mgr.stop_container(container.container_id)
-                container_mgr.remove_container(container.container_id)
-                deletion_summary['containers_deleted'] += 1
-                current_app.logger.info(f"Container {container.container_id[:12]} (type: {container.container_type}) deleted")
-            except Exception as e:
-                current_app.logger.warning(f"Container {container.container_id[:12]} failed: {str(e)}")
-                deletion_summary['containers_failed'].append(container.container_id[:12])
-        # Clean up named volumes
-        template = Config.CONTAINER_TEMPLATES.get(container.container_type, {})
-        container_mgr.remove_volumes(container.user_id, container.container_type, template.get('volumes', []))
-
+    # 1. Delete all Docker containers, volumes and the network. A failure stops
+    # here: the account stays, so the deletion can be retried and is not
+    # reported as complete. cascade='all, delete-orphan' on User.containers
+    # handles the DB records when the user is deleted below.
     try:
-        container_mgr.remove_user_network(user.id)
+        deletion_summary['containers_deleted'] = ContainerManager().purge_user_resources(user.id)
     except Exception as e:
-        current_app.logger.warning(f"Network of user {user.id} could not be removed: {str(e)}")
+        current_app.logger.error(f"[SPAWNER] Purge of user {user.id} failed: {e}")
+        return jsonify({'error': 'Container oder Volumes konnten nicht entfernt werden'}), 500
 
     # 2. Delete MagicLinkTokens (GDPR: IP addresses)
     magic_tokens = MagicLinkToken.query.filter_by(user_id=user.id).all()
@@ -608,14 +595,7 @@ def _debug_delete_email():
         user_id = user.id
         email_deleted = user.email
 
-        # Container löschen falls vorhanden
-        if user.container_id:
-            try:
-                container_mgr = ContainerManager()
-                container_mgr.stop_container(user.container_id)
-                container_mgr.remove_container(user.container_id)
-            except Exception:
-                pass
+        ContainerManager().purge_user_resources(user_id)
 
         db.session.delete(user)
         db.session.commit()

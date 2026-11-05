@@ -309,6 +309,17 @@ def api_signup():
     db.session.add(magic_token)
     db.session.commit()
 
+    # This ID may have belonged to a deleted user: never hand on their data.
+    # Also clears what older versions left behind on delete.
+    try:
+        ContainerManager().purge_user_resources(user.id)
+    except Exception as e:
+        current_app.logger.error(f"[SPAWNER] Purge of new ID {user.id} failed: {e}")
+        db.session.delete(magic_token)
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"error": "Registrierung fehlgeschlagen"}), 500
+
     # Send email
     try:
         send_magic_link_email(email, token, "signup")

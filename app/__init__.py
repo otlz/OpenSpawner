@@ -25,7 +25,11 @@ def create_app():
 
     # Validate security config in production (non-localhost)
     if Config.BASE_DOMAIN != "localhost":
-        if Config.SECRET_KEY == "dev-secret-key-change-in-production":
+        # The code default and the value shipped in .env.example are both public
+        if Config.SECRET_KEY in (
+            "dev-secret-key-change-in-production",
+            "dev-secret-change-in-production",
+        ):
             raise RuntimeError(
                 "CRITICAL: SECRET_KEY must be changed in production. "
                 'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
