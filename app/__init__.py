@@ -1,4 +1,5 @@
-from flask import Flask, jsonify
+from urllib.parse import urlparse
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flasgger import Swagger
 from flask_apscheduler import APScheduler
@@ -95,10 +96,40 @@ def create_app():
     def missing_token_callback(error):
         return jsonify({"error": "Authentication required"}), 401
 
+    @app.before_request
+    def reject_cross_site_writes():
+        """CSRF guard for API writes, which authenticate by cookie.
+
+        SameSite=Strict does not help against other sites on the school's
+        domain: they count as the same site, and some host student content.
+        Browsers send Origin with every cross-origin write.
+        """
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return None
+        # forwardAuth: Traefik passes on the headers of the container request
+        if not request.path.startswith("/api/") or request.path == "/api/auth/forward":
+            return None
+        origin = request.headers.get("Origin")
+        if origin is None:
+            return None
+        trusted = {request.host, Config.SPAWNER_URL}
+        forwarded_host = request.headers.get("X-Forwarded-Host")
+        if forwarded_host:
+            trusted.add(forwarded_host.split(",")[0].strip())
+        for url in [Config.FRONTEND_URL, *app.config.get("CORS_ORIGINS", [])]:
+            trusted.add(urlparse(url.strip()).netloc)
+        if urlparse(origin).netloc.lower() in {host.lower() for host in trusted if host}:
+            return None
+        app.logger.warning(
+            f"[SECURITY] Rejected {request.method} {request.path} from origin {origin[:100]}"
+        )
+        return jsonify({"error": "Anfrage von fremder Seite abgelehnt"}), 403
+
     @app.after_request
-    def add_noindex_header(response):
-        """Internal platform: keep API responses out of search engines."""
+    def add_security_headers(response):
+        """Keep API responses out of search engines; no MIME sniffing (avatars)."""
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
     # Configure logging
@@ -192,6 +223,12 @@ def create_app():
                     )
             except Exception as e:
                 app.logger.warning(f"[SPAWNER] Outdated container cleanup failed: {e}")
+
+            try:
+                status = ContainerManager().ensure_egress_firewall(cleanup=True)
+                app.logger.info(f"[SPAWNER] Egress firewall: {status}")
+            except Exception as e:
+                app.logger.error(f"[SPAWNER] Egress firewall could not be started: {e}")
 
         reaper = ContainerReaper(app)
         app.config["SCHEDULER_API_ENABLED"] = False

@@ -5,11 +5,13 @@ WORKDIR /app
 # Ensure Python output is sent straight to logs (no buffering)
 ENV PYTHONUNBUFFERED=1
 
-# System dependencies
+# System dependencies. iptables is for the egress firewall, which runs from
+# this image in its own container (app/services/egress_firewall.py)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
-        ca-certificates && \
+        ca-certificates \
+        iptables && \
     rm -rf /var/lib/apt/lists/*
 
 # Python dependencies

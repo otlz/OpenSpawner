@@ -179,6 +179,14 @@ class Config:
     # Traefik container to attach to user networks (auto-detected when empty)
     TRAEFIK_CONTAINER = os.getenv('TRAEFIK_CONTAINER', '')
 
+    # Egress firewall (Traefik mode): user containers keep the public internet,
+    # but lose the host, the LAN, Traefik's ports and outgoing mail
+    EGRESS_FIREWALL = os.getenv('EGRESS_FIREWALL', 'true').lower() == 'true'
+    # Exceptions, comma-separated: CIDR or CIDR:port, e.g. 172.16.1.4/32:4000
+    EGRESS_ALLOW = os.getenv('EGRESS_ALLOW', '')
+    # Image the firewall runs from (default: the backend's own image)
+    EGRESS_FIREWALL_IMAGE = os.getenv('EGRESS_FIREWALL_IMAGE', '')
+
     # Traefik forwardAuth endpoint guarding user containers (owner-only access).
     # Uses a network alias unique to OpenSpawner: a generic name like "backend"
     # can resolve to another stack's container on a shared Traefik network.

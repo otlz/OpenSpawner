@@ -1,11 +1,23 @@
 """Container-Verwaltung für Docker-basierte Benutzer-Container."""
 import ipaddress
 import logging
+import re
+import socket
 import time
 import docker
 from config import Config
 
 logger = logging.getLogger(__name__)
+
+FIREWALL_CONTAINER = 'openspawner-egress-firewall'
+# Opt-in compose service of the same firewall in earlier versions
+LEGACY_FIREWALL_CONTAINER = 'egress-firewall'
+
+# Without a limit a user can fill the host's disk through the container log
+# (writing to /proc/1/fd/1 works for the container's own user)
+USER_LOG_CONFIG = docker.types.LogConfig(
+    type='json-file', config={'max-size': '10m', 'max-file': '3'}
+)
 
 
 class ContainerManager:
@@ -310,6 +322,139 @@ class ContainerManager:
             except Exception as e:
                 logger.warning(f"[SPAWNER] Could not remove volume {vol_name}: {str(e)}")
 
+    def ensure_egress_firewall(self, cleanup=False):
+        """Startet die Egress-Firewall oder hält sie aktuell (Traefik-Modus).
+
+        Runs app.services.egress_firewall from the backend's own image, so every
+        deploy updates it. Called on startup and every REAPER_INTERVAL: a stopped
+        or outdated firewall is replaced. Its rules stay in place meanwhile.
+
+        Started here and not as a compose service: a host-network service fails
+        the whole deploy when the platform adds networks to every service.
+
+        Args:
+            cleanup: With EGRESS_FIREWALL off, also remove rules that were left
+                behind without a container (on startup).
+
+        Returns:
+            'running', 'started' or 'disabled'
+        """
+        client = self._get_client()
+        self._remove_legacy_firewall(client)
+        try:
+            current = client.containers.get(FIREWALL_CONTAINER)
+        except docker.errors.NotFound:
+            current = None
+
+        image = self._firewall_image()
+        command = ['python', '-m', 'app.services.egress_firewall']
+        options = {
+            'network_mode': 'host',
+            'user': '0',
+            'cap_drop': ['ALL'],
+            'cap_add': ['NET_ADMIN', 'NET_RAW'],
+            'security_opt': ['no-new-privileges:true'],
+            'mem_limit': '128m',
+            'pids_limit': 32,
+            'labels': {'openspawner.role': 'egress-firewall'},
+            'log_config': docker.types.LogConfig(
+                type='json-file', config={'max-size': '1m', 'max-file': '2'}
+            ),
+        }
+
+        if not Config.EGRESS_FIREWALL:
+            if current is not None or cleanup:
+                if current is not None:
+                    current.remove(force=True)
+                client.containers.run(image, [*command, 'remove'], remove=True, **options)
+                logger.warning(
+                    "[SPAWNER] Egress firewall disabled (EGRESS_FIREWALL=false): "
+                    "user containers reach the host and the LAN"
+                )
+            return 'disabled'
+
+        env = {
+            'USER_NETWORK_SUBNET': Config.USER_NETWORK_SUBNET,
+            'EGRESS_ALLOW': Config.EGRESS_ALLOW,
+            'TRAEFIK_CONTAINER': self._traefik_name(current),
+            'DOCKER_HOST': 'unix:///var/run/docker.sock',
+        }
+        wanted = {f"{key}={value}" for key, value in env.items()}
+        if (
+            current is not None
+            and current.status == 'running'
+            and current.attrs.get('Image') == image
+            and wanted <= set(current.attrs['Config'].get('Env') or [])
+        ):
+            return 'running'
+
+        if current is not None:
+            current.remove(force=True)
+        client.containers.run(
+            image,
+            command,
+            name=FIREWALL_CONTAINER,
+            detach=True,
+            restart_policy={'Name': 'unless-stopped'},
+            environment=env,
+            # Only to read Traefik's addresses (":ro" does not limit the API)
+            volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}},
+            **options,
+        )
+        logger.info(f"[SPAWNER] Egress firewall started for {Config.USER_NETWORK_SUBNET}")
+        return 'started'
+
+    @staticmethod
+    def _remove_legacy_firewall(client):
+        """Entfernt den Firewall-Compose-Dienst früherer Versionen (gleiche Ketten)."""
+        try:
+            legacy = client.containers.get(LEGACY_FIREWALL_CONTAINER)
+        except docker.errors.NotFound:
+            return
+        if legacy.attrs['Config'].get('Image', '').startswith('openspawner-egress-firewall'):
+            legacy.remove(force=True)
+            logger.info("[SPAWNER] Removed the egress-firewall service of an earlier version")
+
+    def _firewall_image(self):
+        """ID des Images, aus dem die Firewall läuft: das eigene des Backends."""
+        client = self._get_client()
+        if Config.EGRESS_FIREWALL_IMAGE:
+            return client.images.get(Config.EGRESS_FIREWALL_IMAGE).id
+        for ref in (socket.gethostname(), self._own_container_id()):
+            if not ref:
+                continue
+            try:
+                return client.containers.get(ref).attrs['Image']
+            except docker.errors.APIError:
+                continue
+        raise Exception("Own container not found, set EGRESS_FIREWALL_IMAGE")
+
+    @staticmethod
+    def _own_container_id():
+        """Container-ID aus den Mounts (falls der Hostname gesetzt wurde)."""
+        try:
+            with open('/proc/self/mountinfo') as f:
+                match = re.search(r'/containers/([0-9a-f]{64})/', f.read())
+        except OSError:
+            return None
+        return match.group(1) if match else None
+
+    def _traefik_name(self, current):
+        """Name des Traefik-Containers, dessen Adressen die Firewall sperrt."""
+        try:
+            traefik_id, host_network = self._find_traefik_container()
+            if host_network:
+                return ''
+            return self._get_client().api.inspect_container(traefik_id)['Name'].lstrip('/')
+        except Exception as e:
+            # Traefik may be restarting: keep what the running firewall uses
+            if current is not None:
+                for item in current.attrs['Config'].get('Env') or []:
+                    if item.startswith('TRAEFIK_CONTAINER='):
+                        return item.split('=', 1)[1]
+            logger.warning(f"[SPAWNER] Traefik not found for the egress firewall: {e}")
+            return ''
+
     def purge_user_resources(self, user_id):
         """Entfernt alle Container, Volumes und das Netzwerk einer Benutzer-ID.
 
@@ -516,6 +661,7 @@ class ContainerManager:
                 cap_drop=['ALL'],
                 cap_add=cap_add,
                 security_opt=['no-new-privileges:true'],
+                log_config=USER_LOG_CONFIG,
                 volumes=volumes,
                 ports=ports,
                 # Attach at creation, not via network.connect() afterwards: a

@@ -121,25 +121,9 @@ services:
         docker compose -f docker-compose.prod.yml --profile "$$TEMPLATE_PROFILE" build
         $$(docker compose -f docker-compose.prod.yml --profile "$$TEMPLATE_PROFILE" config --services | grep '^template-')
 
-  # Keeps user containers away from the host, the LAN and cloud metadata. Opt-in
-  # with COMPOSE_PROFILES=firewall: it changes the host's firewall, so try it on
-  # the real server first. Stopping it keeps the rules; to take them out:
-  #   docker compose -f docker-compose.prod.yml run --rm egress-firewall remove
-  egress-firewall:
-    build: ./deploy/egress-firewall
-    image: openspawner-egress-firewall
-    container_name: egress-firewall
-    profiles: ["firewall"]
-    restart: unless-stopped
-    network_mode: host
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    environment:
-      - USER_NETWORK_SUBNET=${USER_NETWORK_SUBNET:-10.213.0.0/16}
-      - EGRESS_ALLOW=${EGRESS_ALLOW:-}
+  # The egress firewall for user containers is not a service here: the backend
+  # starts it (container openspawner-egress-firewall), see EGRESS_FIREWALL in
+  # .env.example.
 
   # User container templates (spawned per user at runtime). These are
   # build-only: the `build`/`default` profiles keep them out of `up`, so they

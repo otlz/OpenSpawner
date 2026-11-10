@@ -77,6 +77,13 @@ class ContainerReaper:
         except Exception as e:
             self.app.logger.warning(f"[REAPER] Could not attach Traefik to user networks: {str(e)}")
 
+        # Replaces a stopped firewall and follows a recreated Traefik
+        try:
+            if ContainerManager().ensure_egress_firewall() == 'started':
+                self.app.logger.info("[REAPER] Egress firewall (re)started")
+        except Exception as e:
+            self.app.logger.error(f"[REAPER] Egress firewall check failed: {e}")
+
     def reap_stale_containers(self):
         """Entfernt gestoppte Container, die länger als CONTAINER_STALE_TIMEOUT inaktiv sind.
 

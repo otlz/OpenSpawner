@@ -109,6 +109,11 @@ export default function EmailRulesTab() {
             Wildcards mit <code className="rounded bg-muted px-1">*</code> erlaubt (z.B. <code className="rounded bg-muted px-1">*@school.de</code>).
             Ohne Regeln ist die Registrierung offen.
           </p>
+          <p className="mt-2">
+            Eine Whitelist allein sperrt niemanden aus: Adressen ohne passende Regel sind erlaubt.
+            Nur Schuladressen zulassen: Blacklist <code className="rounded bg-muted px-1">*</code> und
+            Whitelist <code className="rounded bg-muted px-1">*@school.de</code>.
+          </p>
         </CardContent>
       </Card>
 
